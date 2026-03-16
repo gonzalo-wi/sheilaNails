@@ -1,0 +1,6 @@
+// Central re-export so any file can import from '@/mocks'
+export { mockTurnos } from './turnos.mock'
+export { mockServicios } from './servicios.mock'
+export { mockClientes } from './clientes.mock'
+export { mockHorarios } from './horarios.mock'
+export { mockDashboardStats, mockFinanzasStats } from './stats.mock'
