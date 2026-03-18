@@ -1,6 +1,14 @@
 import { ref, computed } from 'vue'
-import { statsService } from '@/modules/admin/services/mockApiService'
-import type { FinanzasStats } from '@/shared/types'
+import { dashboardApi } from '@/modules/admin/api'
+import type { FinanzasStats, FinanzasPeriodo } from '@/shared/types'
+
+const EMPTY_PERIODO: FinanzasPeriodo = {
+  ingresos: 0,
+  senas: 0,
+  cancelaciones: 0,
+  turnos: 0,
+  ticketPromedio: 0,
+}
 
 export function useFinanzas() {
   const stats = ref<FinanzasStats | null>(null)
@@ -33,7 +41,63 @@ export function useFinanzas() {
     loading.value = true
     error.value = null
     try {
-      stats.value = await statsService.getFinanzasStats()
+      const metrics = await dashboardApi.getMetrics()
+
+      // Derive today from ingresosUltimos7Dias
+      const hoyEntry = metrics.ingresosUltimos7Dias.find(d => d.esHoy)
+      const hoyIngresos = hoyEntry?.ingresos ?? metrics.ingresosDia
+      const hoyTurnos = hoyEntry?.turnos ?? metrics.turnosHoy
+
+      // Derive week from ingresosUltimos7Dias
+      const semanaIngresos = metrics.ingresosUltimos7Dias.reduce((s, d) => s + d.ingresos, 0)
+      const semanaTurnos = metrics.ingresosUltimos7Dias.reduce((s, d) => s + d.turnos, 0)
+
+      stats.value = {
+        hoy: {
+          ingresos: hoyIngresos,
+          senas: metrics.senasCobradas,
+          cancelaciones: metrics.turnosCanceladosHoy,
+          turnos: metrics.turnosHoy,
+          ticketPromedio: hoyTurnos > 0 ? Math.round(hoyIngresos / hoyTurnos) : 0,
+        },
+        semana: {
+          ingresos: semanaIngresos,
+          senas: metrics.senasCobradas,
+          cancelaciones: 0,
+          turnos: metrics.turnosSemana,
+          ticketPromedio: semanaTurnos > 0 ? Math.round(semanaIngresos / semanaTurnos) : 0,
+        },
+        mes: {
+          ingresos: metrics.ingresosMes,
+          senas: metrics.senasCobradas,
+          cancelaciones: 0,
+          turnos: 0,
+          ticketPromedio: 0,
+        },
+        mesAnterior: { ...EMPTY_PERIODO },
+        anio: {
+          ingresos: metrics.ingresosMes,
+          senas: metrics.senasCobradas,
+          cancelaciones: 0,
+          turnos: 0,
+          ticketPromedio: 0,
+        },
+        ingresosPorDia: metrics.ingresosUltimos7Dias.map(d => ({
+          fecha: d.fecha,
+          etiqueta: d.etiqueta,
+          ingresos: d.ingresos,
+          turnos: d.turnos,
+          esHoy: d.esHoy ?? false,
+        })),
+        ingresosPorMes: [],
+        ingresosPorServicio: metrics.turnosPorServicio.map(s => ({
+          servicio: s.servicio,
+          ingresos: s.ingresos,
+          cantidad: s.cantidad,
+          ticket: s.cantidad > 0 ? Math.round(s.ingresos / s.cantidad) : 0,
+        })),
+        ingresosPorProfesional: [],
+      } as FinanzasStats
     } catch (e) {
       error.value = 'Error al cargar estadísticas financieras'
       console.error(e)
@@ -52,3 +116,4 @@ export function useFinanzas() {
     fetchStats,
   }
 }
+

@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Menu, X } from 'lucide-vue-next'
+import { useClientAuthStore } from '@/modules/auth/store/clientAuth'
+import { Menu, X, LogOut, User } from 'lucide-vue-next'
 
 const mobileMenuOpen = ref(false)
+const clientAuthStore = useClientAuthStore()
+
+const isLoggedIn = computed(() => clientAuthStore.isAuthenticated)
+const userFullName = computed(() => clientAuthStore.fullName)
+const userInitials = computed(() => clientAuthStore.initials)
+
+function logout() {
+  clientAuthStore.logout()
+  mobileMenuOpen.value = false
+}
 </script>
 
 <template>
@@ -12,8 +23,9 @@ const mobileMenuOpen = ref(false)
     <nav class="fixed top-0 left-0 right-0 z-50 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800/50">
       <div class="container-custom">
         <div class="flex justify-between items-center h-20">
-          <RouterLink to="/" class="font-display text-2xl font-bold text-gradient">
-            Nails Studio
+          <RouterLink to="/" class="flex items-center gap-3">
+            <img src="@/assets/sheiLogo.png" alt="Nails Deni" class="h-12 w-12 rounded-full object-cover border-2 border-primary-500/50" />
+            <span class="hidden md:block font-display font-bold text-white text-xl tracking-tight">Nails Deni</span>
           </RouterLink>
 
           <!-- Desktop Menu -->
@@ -36,12 +48,46 @@ const mobileMenuOpen = ref(false)
             >
               Contacto
             </a>
-            <RouterLink
-              to="/turnos"
-              class="btn btn-primary !py-2.5 !px-6 hover-glow"
-            >
-              Reservar turno
-            </RouterLink>
+
+            <!-- Session state: logged in -->
+            <div v-if="isLoggedIn" class="flex items-center gap-3">
+              <RouterLink
+                to="/turnos"
+                class="btn btn-primary !py-2.5 !px-5 hover-glow text-sm"
+              >
+                Reservar turno
+              </RouterLink>
+              <div class="flex items-center gap-2 pl-3 border-l border-neutral-800">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-primary-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                  {{ userInitials }}
+                </div>
+                <span class="text-sm text-neutral-300 max-w-[120px] truncate">{{ userFullName }}</span>
+                <button
+                  class="ml-1 text-neutral-500 hover:text-red-400 transition-colors"
+                  title="Cerrar sesión"
+                  @click="logout"
+                >
+                  <LogOut :size="16" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Session state: guest -->
+            <div v-else class="flex items-center gap-3">
+              <RouterLink
+                :to="{ name: 'client-login' }"
+                class="text-neutral-300 hover:text-white text-sm font-medium transition-colors flex items-center gap-1.5"
+              >
+                <User :size="16" />
+                Iniciar sesión
+              </RouterLink>
+              <RouterLink
+                to="/turnos"
+                class="btn btn-primary !py-2.5 !px-5 hover-glow text-sm"
+              >
+                Reservar turno
+              </RouterLink>
+            </div>
           </div>
 
           <!-- Mobile Menu Button -->
@@ -85,13 +131,51 @@ const mobileMenuOpen = ref(false)
             >
               Contacto
             </a>
-            <RouterLink 
-              to="/turnos" 
-              class="btn btn-primary mt-4 block text-center"
-              @click="mobileMenuOpen = false"
-            >
-              Reservar turno
-            </RouterLink>
+
+            <div class="pt-4 space-y-2">
+              <RouterLink
+                to="/turnos"
+                class="btn btn-primary block text-center"
+                @click="mobileMenuOpen = false"
+              >
+                Reservar turno
+              </RouterLink>
+
+              <!-- Logged in: user info + logout -->
+              <div v-if="isLoggedIn" class="flex items-center justify-between px-1 pt-3 border-t border-neutral-800">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-primary-500 flex items-center justify-center text-white text-xs font-bold">
+                    {{ userInitials }}
+                  </div>
+                  <span class="text-sm text-neutral-300 truncate max-w-[160px]">{{ userFullName }}</span>
+                </div>
+                <button
+                  class="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-red-400 transition-colors"
+                  @click="logout"
+                >
+                  <LogOut :size="16" />
+                  Salir
+                </button>
+              </div>
+
+              <!-- Guest: login + register links -->
+              <div v-else class="flex gap-2 pt-3 border-t border-neutral-800">
+                <RouterLink
+                  :to="{ name: 'client-login' }"
+                  class="flex-1 text-center py-2.5 rounded-xl border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-600 text-sm font-medium transition-all"
+                  @click="mobileMenuOpen = false"
+                >
+                  Iniciar sesión
+                </RouterLink>
+                <RouterLink
+                  :to="{ name: 'client-register' }"
+                  class="flex-1 text-center py-2.5 rounded-xl bg-primary-500/10 border border-primary-500/30 text-primary-400 hover:bg-primary-500/20 text-sm font-medium transition-all"
+                  @click="mobileMenuOpen = false"
+                >
+                  Registrarse
+                </RouterLink>
+              </div>
+            </div>
           </div>
         </Transition>
       </div>

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useBookingStore } from '../store/booking'
 import Card from '@/shared/components/ui/Card.vue'
 import Button from '@/shared/components/ui/Button.vue'
-import { CheckCircle2, Calendar, Clock, User, Home } from 'lucide-vue-next'
+import { CheckCircle2, Calendar, Clock, Home } from 'lucide-vue-next'
 import { format, parse } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -36,11 +36,11 @@ if (!turno.value && !bookingStore.selectedServicio) {
       <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-fade-in">
         <CheckCircle2 :size="60" class="text-green-600" />
       </div>
-      <h1 class="text-4xl font-display font-bold text-neutral-900 mb-2">
+      <h1 class="text-4xl font-display font-bold text-white mb-2">
         ¡Turno confirmado!
       </h1>
-      <p class="text-lg text-neutral-600">
-        Te esperamos en Nails Studio
+      <p class="text-lg text-neutral-300">
+        Te esperamos en Nails Deni
       </p>
     </div>
 
@@ -59,19 +59,6 @@ if (!turno.value && !bookingStore.selectedServicio) {
             <p class="text-neutral-700 capitalize">{{ fechaFormateada }}</p>
             <p class="text-lg font-semibold text-primary-600">
               {{ turno?.horaInicio || bookingStore.selectedHora }}
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-start gap-4 p-4 bg-neutral-50 rounded-lg">
-          <div class="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <User :size="20" class="text-primary-600" />
-          </div>
-          <div class="flex-1">
-            <h3 class="font-semibold text-neutral-900 mb-1">Profesional</h3>
-            <p class="text-neutral-700">
-              {{ turno?.profesional?.nombre || bookingStore.selectedProfesional?.nombre }}
-              {{ turno?.profesional?.apellido || bookingStore.selectedProfesional?.apellido }}
             </p>
           </div>
         </div>

@@ -2,9 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useFinanzas } from '@/composables/useFinanzas'
 import Loading from '@/shared/components/common/Loading.vue'
-import { DollarSign, TrendingUp, TrendingDown, BarChart2, Calendar, Users } from 'lucide-vue-next'
+import { DollarSign, TrendingUp, TrendingDown, BarChart2, Calendar } from 'lucide-vue-next'
 
-const { stats, loading, variacionMes, maxIngresoDiario, maxIngresoMensual, fetchStats } = useFinanzas()
+const { stats, loading, variacionMes, maxIngresoDiario, fetchStats } = useFinanzas()
 
 type Periodo = 'hoy' | 'semana' | 'mes' | 'anio'
 const periodo = ref<Periodo>('mes')
@@ -102,37 +102,59 @@ onMounted(() => fetchStats())
         <!-- Ingresos por día -->
         <div class="bg-white rounded-xl shadow-soft p-5">
           <h2 class="font-semibold text-neutral-800 mb-4 flex items-center gap-2">
-            <Calendar :size="16" class="text-primary-500" /> Ingresos diarios (últimos 7 días)
+            <Calendar :size="16" class="text-primary-500" /> Ingresos últimos 7 días
           </h2>
-          <div class="space-y-2">
+          <div v-if="stats.ingresosPorDia.length" class="space-y-2">
             <div v-for="d in stats.ingresosPorDia" :key="d.fecha" class="flex items-center gap-3">
-              <span class="text-xs text-neutral-500 w-8 shrink-0">{{ d.etiqueta }}</span>
+              <span class="text-xs text-neutral-500 w-8 shrink-0 font-medium">{{ d.etiqueta }}</span>
               <div class="flex-1 bg-neutral-100 rounded-full h-3 overflow-hidden">
                 <div
                   class="h-3 rounded-full transition-all duration-700"
-                  :class="d.esHoy ? 'bg-primary-500' : 'bg-primary-200'"
+                  :class="d.esHoy ? 'bg-primary-500' : 'bg-primary-300'"
                   :style="{ width: `${pct(d.ingresos, maxIngresoDiario)}%` }"
                 />
               </div>
-              <span class="text-xs font-medium text-neutral-700 w-20 text-right shrink-0">{{ formatCurrency(d.ingresos) }}</span>
+              <span class="text-xs font-semibold text-neutral-700 w-22 text-right shrink-0">{{ formatCurrency(d.ingresos) }}</span>
             </div>
           </div>
+          <p v-else class="text-sm text-neutral-400 text-center py-6">Sin datos</p>
         </div>
 
-        <!-- Ingresos por mes -->
+        <!-- Semana vs Mes -->
         <div class="bg-white rounded-xl shadow-soft p-5">
-          <h2 class="font-semibold text-neutral-800 mb-4 flex items-center gap-2">
-            <BarChart2 :size="16" class="text-blue-500" /> Ingresos por mes
+          <h2 class="font-semibold text-neutral-800 mb-5 flex items-center gap-2">
+            <TrendingUp :size="16" class="text-emerald-500" /> Semana vs Mes
           </h2>
-          <div class="flex items-end gap-2 h-28">
-            <div v-for="m in stats.ingresosPorMes" :key="m.mes" class="flex-1 flex flex-col items-center gap-1">
-              <span class="text-xs text-neutral-400 font-medium">${{ Math.round(m.ingresos / 1000) }}k</span>
-              <div
-                class="w-full rounded-t-lg transition-all duration-700"
-                :class="m.esActual ? 'bg-primary-500' : 'bg-primary-200'"
-                :style="{ height: `${pct(m.ingresos, maxIngresoMensual) * 0.8}px` }"
-              />
-              <span class="text-xs text-neutral-500">{{ m.etiqueta }}</span>
+          <div class="space-y-5">
+            <div>
+              <div class="flex justify-between mb-1.5">
+                <span class="text-sm font-medium text-neutral-700">Esta semana</span>
+                <span class="text-sm font-bold text-neutral-900">{{ formatCurrency(stats.semana.ingresos) }}</span>
+              </div>
+              <div class="w-full bg-neutral-100 rounded-full h-3">
+                <div
+                  class="h-3 rounded-full bg-primary-500 transition-all duration-700"
+                  :style="{ width: `${pct(stats.semana.ingresos, stats.mes.ingresos)}%` }"
+                />
+              </div>
+              <p class="text-xs text-neutral-400 mt-1">{{ pct(stats.semana.ingresos, stats.mes.ingresos) }}% del mes</p>
+            </div>
+            <div>
+              <div class="flex justify-between mb-1.5">
+                <span class="text-sm font-medium text-neutral-700">Este mes</span>
+                <span class="text-sm font-bold text-neutral-900">{{ formatCurrency(stats.mes.ingresos) }}</span>
+              </div>
+              <div class="w-full bg-primary-100 rounded-full h-3" />
+            </div>
+            <div class="pt-3 border-t border-neutral-100 grid grid-cols-2 gap-4">
+              <div>
+                <p class="text-xs text-neutral-400">Señas cobradas</p>
+                <p class="text-lg font-bold text-primary-700 mt-0.5">{{ formatCurrency(stats.mes.senas) }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-neutral-400">Turnos esta semana</p>
+                <p class="text-lg font-bold text-neutral-900 mt-0.5">{{ stats.semana.turnos }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -147,49 +169,54 @@ onMounted(() => fetchStats())
             <DollarSign :size="16" class="text-emerald-500" /> Ingresos por servicio
           </h2>
           <div v-if="stats.ingresosPorServicio.length" class="space-y-3">
-            <div v-for="(row, i) in stats.ingresosPorServicio" :key="row.servicio" class="flex items-center gap-3">
-              <span class="w-5 h-5 rounded-full bg-neutral-100 text-xs font-bold text-neutral-400 flex items-center justify-center flex-shrink-0">
-                {{ i + 1 }}
-              </span>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-neutral-800 truncate">{{ row.servicio }}</p>
-                <p class="text-xs text-neutral-400">{{ row.cantidad }} turnos</p>
+            <div v-for="(row, i) in stats.ingresosPorServicio" :key="row.servicio">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="w-5 h-5 rounded-full bg-neutral-100 text-xs font-bold text-neutral-400 flex items-center justify-center flex-shrink-0">{{ i + 1 }}</span>
+                <span class="flex-1 text-sm font-medium text-neutral-800 truncate">{{ row.servicio }}</span>
+                <span class="text-sm font-bold text-primary-700 shrink-0">{{ formatCurrency(row.ingresos) }}</span>
               </div>
-              <span class="text-sm font-bold text-primary-700 shrink-0">{{ formatCurrency(row.ingresos) }}</span>
+              <div class="flex items-center gap-2 pl-7">
+                <div class="flex-1 bg-neutral-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    class="h-2 rounded-full bg-emerald-400 transition-all duration-700"
+                    :style="{ width: `${pct(row.cantidad, stats.ingresosPorServicio[0]?.cantidad || 1)}%` }"
+                  />
+                </div>
+                <span class="text-xs text-neutral-400 w-14 text-right shrink-0">{{ row.cantidad }} turnos</span>
+              </div>
             </div>
           </div>
           <p v-else class="text-sm text-neutral-400 text-center py-4">Sin datos</p>
         </div>
 
-        <!-- Por profesional -->
+        <!-- Servicios más solicitados (bar) -->
         <div class="bg-white rounded-xl shadow-soft p-5">
           <h2 class="font-semibold text-neutral-800 mb-4 flex items-center gap-2">
-            <Users :size="16" class="text-purple-500" /> Ingresos por profesional
+            <BarChart2 :size="16" class="text-blue-500" /> Servicios más solicitados
           </h2>
-          <div v-if="stats.ingresosPorProfesional.length" class="space-y-4">
-            <div v-for="pro in stats.ingresosPorProfesional" :key="pro.nombre" class="space-y-1">
-              <div class="flex justify-between text-sm">
-                <span class="font-medium text-neutral-800">{{ pro.nombre }}</span>
-                <span class="font-bold text-primary-700">{{ formatCurrency(pro.ingresos) }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="flex-1 bg-neutral-100 rounded-full h-2">
-                  <div
-                    class="h-2 bg-purple-400 rounded-full transition-all duration-700"
-                    :style="{ width: `${pct(pro.ingresos, stats.ingresosPorProfesional[0]?.ingresos || 1)}%` }"
-                  />
-                </div>
-                <span class="text-xs text-neutral-400 shrink-0">{{ pro.turnos }} turnos</span>
-              </div>
+          <div v-if="stats.ingresosPorServicio.length" class="flex items-end gap-3 h-36">
+            <div
+              v-for="row in stats.ingresosPorServicio.slice(0, 6)"
+              :key="row.servicio"
+              class="flex-1 flex flex-col items-center gap-1 min-w-0"
+            >
+              <span class="text-xs text-neutral-500 font-semibold">{{ row.cantidad }}</span>
+              <div
+                class="w-full rounded-t-lg bg-blue-400 transition-all duration-700 hover:bg-blue-500"
+                :style="{ height: `${pct(row.cantidad, stats.ingresosPorServicio[0]?.cantidad || 1) * 0.9}px` }"
+              />
+              <span class="text-xs text-neutral-500 truncate w-full text-center" :title="row.servicio">
+                {{ row.servicio.length > 8 ? row.servicio.slice(0, 7) + '…' : row.servicio }}
+              </span>
             </div>
           </div>
-          <p v-else class="text-sm text-neutral-400 text-center py-4">Sin datos</p>
+          <p v-else class="text-sm text-neutral-400 text-center py-6">Sin datos</p>
         </div>
 
       </div>
 
-      <!-- Comparison mes anterior -->
-      <div v-if="stats.mesAnterior" class="mt-4 bg-white rounded-xl shadow-soft p-5">
+      <!-- Comparison mes anterior (solo si hay datos reales) -->
+      <div v-if="stats.mesAnterior.ingresos > 0" class="mt-4 bg-white rounded-xl shadow-soft p-5">
         <h2 class="font-semibold text-neutral-800 mb-4 flex items-center gap-2">
           <TrendingUp :size="16" class="text-neutral-500" /> Comparativa mes actual vs. mes anterior
         </h2>

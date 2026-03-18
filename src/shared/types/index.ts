@@ -16,12 +16,8 @@ export interface PaginatedResponse<T> {
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
-export type EstadoTurno =
-  | 'PENDIENTE'
-  | 'CONFIRMADO'
-  | 'CANCELADO'
-  | 'COMPLETADO'
-  | 'NO_SHOW'
+// Values match the backend API: PENDING | CONFIRMED | DONE | CANCELLED | ABSENT
+export type EstadoTurno = 'PENDING' | 'CONFIRMED' | 'DONE' | 'CANCELLED' | 'ABSENT'
 
 // ─── Entities ───────────────────────────────────────────────────────────────
 
@@ -33,7 +29,6 @@ export interface Servicio {
   precio: number            // precio base
   precioSena?: number       // monto sugerido de seña
   requiereSena: boolean
-  categoria: string
   color?: string            // hex color for visual label
   imagen?: string
   activo: boolean
@@ -105,8 +100,9 @@ export interface Turno {
   // Pricing breakdown (admin-managed)
   precioBase: number         // service base price
   extras: TurnoExtra[]       // additional decorations/add-ons
-  precioExtras: number       // sum of extras
-  precioTotalFinal: number   // editable final total (admin can override)
+  precioExtras: number       // sum of extras  (sent as extras_amount)
+  extrasNota?: string        // extras_note: description of extras
+  precioTotalFinal: number   // final_price returned by backend
 
   // Seña (deposit)
   montoSena: number
@@ -136,6 +132,7 @@ export interface BloqueoHorario {
 
 /** Configuración de horarios por día de la semana */
 export interface HorarioConfig {
+  id?: number
   dia: number         // 0=Domingo, 1=Lunes … 6=Sábado
   diaNombre: string
   activo: boolean
@@ -156,6 +153,7 @@ export interface DashboardStats {
   turnosConfirmadosHoy: number
   turnosPendientesHoy: number
   turnosCanceladosHoy: number
+  turnosRealizadosHoy: number
 
   // Semana / Mes
   turnosSemana: number
@@ -262,23 +260,22 @@ export interface IngresoProfesional {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
-export interface Usuario {
-  id: number
-  email: string
-  nombre: string
-  apellido: string
-  rol: 'ADMIN' | 'PROFESIONAL'
-}
-
+/** Admin login credentials */
 export interface LoginCredentials {
   email: string
   password: string
 }
 
+/** Response from POST /auth/admin/login */
+export interface AdminAuthResponse {
+  token: string
+  admin_id: number
+}
+
+// Kept for backward compatibility with any remaining usages
 export interface AuthResponse {
-  user: Usuario
-  accessToken: string
-  refreshToken?: string
+  token: string
+  admin_id: number
 }
 
 // ─── Booking Flow ────────────────────────────────────────────────────────────
@@ -315,7 +312,6 @@ export interface ClienteFilters {
 }
 
 export interface ServicioFilters {
-  categoria?: string
   activo?: boolean
   busqueda?: string
 }

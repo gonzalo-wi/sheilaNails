@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Servicio, Profesional, Turno } from '@/shared/types'
-import apiClient from '@/app/axios'
+import type { Servicio, Turno } from '@/shared/types'
+import { bookingApi } from '../api'
+import { useClientAuthStore } from '@/modules/auth/store/clientAuth'
 
 export const useBookingStore = defineStore('booking', () => {
   // State
   const currentStep = ref(1)
   const selectedServicio = ref<Servicio | null>(null)
-  const selectedProfesional = ref<Profesional | null>(null)
   const selectedFecha = ref<string>('')
   const selectedHora = ref<string>('')
   const clienteData = ref({
@@ -22,27 +22,19 @@ export const useBookingStore = defineStore('booking', () => {
   // Getters
   const canContinue = computed(() => {
     switch (currentStep.value) {
-      case 1:
-        return !!selectedServicio.value
-      case 2:
-        return !!selectedProfesional.value
-      case 3:
-        return !!selectedFecha.value && !!selectedHora.value
-      case 4:
-        return (
-          clienteData.value.nombre &&
-          clienteData.value.apellido &&
-          clienteData.value.email &&
-          clienteData.value.telefono
-        )
-      default:
-        return false
+      case 1: return !!selectedServicio.value
+      case 2: return !!selectedFecha.value && !!selectedHora.value
+      case 3: {
+        const clientAuth = useClientAuthStore()
+        if (clientAuth.isAuthenticated) return true
+        return !!(clienteData.value.nombre && clienteData.value.apellido && clienteData.value.email && clienteData.value.telefono)
+      }
+      default: return false
     }
   })
 
   const bookingSummary = computed(() => ({
     servicio: selectedServicio.value,
-    profesional: selectedProfesional.value,
     fecha: selectedFecha.value,
     hora: selectedHora.value,
     cliente: clienteData.value,
@@ -65,10 +57,6 @@ export const useBookingStore = defineStore('booking', () => {
     selectedServicio.value = servicio
   }
 
-  function selectProfesional(profesional: Profesional) {
-    selectedProfesional.value = profesional
-  }
-
   function selectDateTime(fecha: string, hora: string) {
     selectedFecha.value = fecha
     selectedHora.value = hora
@@ -79,24 +67,20 @@ export const useBookingStore = defineStore('booking', () => {
   }
 
   async function createTurno(): Promise<Turno> {
-    if (!selectedServicio.value || !selectedProfesional.value) {
-      throw new Error('Faltan datos del servicio o profesional')
-    }
+    if (!selectedServicio.value) throw new Error('Falta seleccionar un servicio')
+    const clientAuth = useClientAuthStore()
+    if (!clientAuth.clientId) throw new Error('No autenticado')
 
     loading.value = true
     try {
-      const turnoData = {
-        servicioId: selectedServicio.value.id,
-        profesionalId: selectedProfesional.value.id,
-        fecha: selectedFecha.value,
-        horaInicio: selectedHora.value,
-        cliente: clienteData.value,
-      }
-
-      const response = await apiClient.post<Turno>('/turnos', turnoData)
-      confirmedTurno.value = response.data
-      currentStep.value = 5
-      return response.data
+      const turno = await bookingApi.createAppointment({
+        client_id: clientAuth.clientId,
+        service_id: selectedServicio.value.id,
+        date: selectedFecha.value,
+        start_time: selectedHora.value,
+      })
+      confirmedTurno.value = turno
+      return turno
     } catch (error) {
       console.error('Error al crear turno:', error)
       throw error
@@ -120,7 +104,6 @@ export const useBookingStore = defineStore('booking', () => {
   function reset() {
     currentStep.value = 1
     selectedServicio.value = null
-    selectedProfesional.value = null
     selectedFecha.value = ''
     selectedHora.value = ''
     clienteData.value = {
@@ -136,7 +119,6 @@ export const useBookingStore = defineStore('booking', () => {
     // State
     currentStep,
     selectedServicio,
-    selectedProfesional,
     selectedFecha,
     selectedHora,
     clienteData,
@@ -149,7 +131,6 @@ export const useBookingStore = defineStore('booking', () => {
     nextStep,
     prevStep,
     selectServicio,
-    selectProfesional,
     selectDateTime,
     updateClienteData,
     createTurno,

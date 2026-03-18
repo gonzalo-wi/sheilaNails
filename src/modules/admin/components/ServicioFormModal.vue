@@ -7,7 +7,6 @@ import { ref, watch, computed } from 'vue'
 import { X } from 'lucide-vue-next'
 import type { Servicio } from '@/shared/types'
 
-const CATEGORIAS = ['Manicura', 'Esculpidas', 'Arte', 'Mantenimiento', 'Pedicura', 'Otro']
 const COLORES_PRESET = ['#ec4899','#8b5cf6','#3b82f6','#10b981','#f59e0b','#f97316','#14b8a6','#6b7280']
 
 interface Props {
@@ -28,7 +27,7 @@ function reset() {
     ? { ...props.servicio }
     : {
         nombre: '', descripcion: '', duracion: 60, precio: 0,
-        precioSena: 0, requiereSena: false, categoria: 'Manicura',
+        precioSena: 0, requiereSena: false,
         color: '#ec4899', activo: true,
       }
 }
@@ -70,17 +69,9 @@ function onSubmit() {
               <textarea v-model="form.descripcion" rows="2" placeholder="Descripción breve del servicio..." class="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none" />
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-neutral-700 mb-1">Categoría *</label>
-                <select v-model="form.categoria" class="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 bg-white" required>
-                  <option v-for="cat in CATEGORIAS" :key="cat" :value="cat">{{ cat }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-neutral-700 mb-1">Duración (min) *</label>
-                <input v-model.number="form.duracion" type="number" min="15" step="15" required class="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-              </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-700 mb-1">Duración (min) *</label>
+              <input v-model.number="form.duracion" type="number" min="15" step="15" required class="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
             </div>
 
             <div class="grid grid-cols-2 gap-4">

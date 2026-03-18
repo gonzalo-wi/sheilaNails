@@ -24,6 +24,24 @@ const fechaHoy = computed(() =>
 function formatCurrency(v: number) {
   return `$${v.toLocaleString('es-AR')}`
 }
+
+// SVG donut chart segments for turnosPorEstado
+const DONUT_R = 54
+const DONUT_C = 2 * Math.PI * DONUT_R // ≈ 339.29
+const donutSegments = computed(() => {
+  if (!stats.value?.turnosPorEstado?.length) return []
+  let offset = 0
+  return stats.value.turnosPorEstado.map(item => {
+    const dash = (item.porcentaje / 100) * DONUT_C
+    const seg = { ...item, dash, offset: -offset }
+    offset += dash
+    return seg
+  })
+})
+
+const maxBarIngresos = computed(() =>
+  Math.max(...(stats.value?.ingresosUltimos7Dias?.map(d => d.ingresos) ?? [0]), 1),
+)
 </script>
 
 <template>
@@ -51,7 +69,7 @@ function formatCurrency(v: number) {
         <p class="text-primary-200 text-sm font-medium mb-4 flex items-center gap-2">
           <Clock :size="14" /> Resumen de hoy
         </p>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           <div class="bg-white/10 rounded-xl p-3 text-center">
             <p class="text-2xl font-bold">{{ resumenHoy?.total }}</p>
             <p class="text-xs text-primary-200">Turnos</p>
@@ -61,11 +79,15 @@ function formatCurrency(v: number) {
             <p class="text-xs text-primary-200">Confirmados</p>
           </div>
           <div class="bg-white/10 rounded-xl p-3 text-center">
+            <p class="text-2xl font-bold text-emerald-300">{{ resumenHoy?.realizados }}</p>
+            <p class="text-xs text-primary-200">Realizados</p>
+          </div>
+          <div class="bg-white/10 rounded-xl p-3 text-center">
             <p class="text-2xl font-bold">{{ resumenHoy?.pendientes }}</p>
             <p class="text-xs text-primary-200">Pendientes</p>
           </div>
           <div class="bg-white/10 rounded-xl p-3 text-center">
-            <p class="text-2xl font-bold">{{ resumenHoy?.cancelados }}</p>
+            <p class="text-2xl font-bold text-red-300">{{ resumenHoy?.cancelados }}</p>
             <p class="text-xs text-primary-200">Cancelados</p>
           </div>
           <div class="bg-white/10 rounded-xl p-3 text-center col-span-1">
@@ -139,7 +161,7 @@ function formatCurrency(v: number) {
                 <div
                   class="w-full rounded-t-lg transition-all duration-500"
                   :class="dia.etiqueta === 'Hoy' ? 'bg-primary-500' : 'bg-primary-200'"
-                  :style="{ height: `${(dia.ingresos / Math.max(...stats.ingresosUltimos7Dias.map(d => d.ingresos))) * 80}px` }"
+                  :style="{ height: `${(dia.ingresos / maxBarIngresos) * 80}px` }"
                 />
                 <span class="text-xs text-neutral-500">{{ dia.etiqueta }}</span>
               </div>
@@ -147,28 +169,49 @@ function formatCurrency(v: number) {
           </div>
         </div>
 
-        <!-- Turnos por estado (donut-style) -->
+        <!-- Turnos por estado (SVG donut) -->
         <div class="bg-white rounded-xl shadow-soft p-5">
           <h2 class="font-semibold text-neutral-800 mb-4 flex items-center gap-2">
             <CheckCircle :size="18" class="text-emerald-500" /> Turnos por estado
           </h2>
-          <div class="space-y-2.5">
-            <div v-for="item in stats.turnosPorEstado" :key="item.estado">
-              <div class="flex justify-between text-xs text-neutral-600 mb-1">
-                <span class="flex items-center gap-1.5">
+          <div v-if="donutSegments.length" class="flex items-center gap-6">
+            <!-- Donut SVG -->
+            <div class="flex-shrink-0">
+              <svg viewBox="0 0 140 140" class="w-28 h-28">
+                <!-- Background ring -->
+                <circle cx="70" cy="70" r="54" fill="none" stroke="#f3f4f6" stroke-width="20" />
+                <!-- Segments -->
+                <circle
+                  v-for="seg in donutSegments"
+                  :key="seg.estado"
+                  cx="70" cy="70" r="54"
+                  fill="none"
+                  :stroke="seg.color"
+                  stroke-width="20"
+                  :stroke-dasharray="`${seg.dash} ${DONUT_C}`"
+                  :stroke-dashoffset="seg.offset"
+                  transform="rotate(-90 70 70)"
+                  stroke-linecap="butt"
+                />
+                <!-- Center label -->
+                <text x="70" y="66" text-anchor="middle" class="text-2xl" font-size="22" font-weight="700" fill="#1a1a1a">
+                  {{ stats?.turnosHoy ?? 0 }}
+                </text>
+                <text x="70" y="82" text-anchor="middle" font-size="9" fill="#9ca3af">total</text>
+              </svg>
+            </div>
+            <!-- Legend -->
+            <div class="flex-1 space-y-2">
+              <div v-for="item in stats?.turnosPorEstado" :key="item.estado" class="flex items-center justify-between">
+                <span class="flex items-center gap-2 text-xs text-neutral-600">
                   <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: item.color }" />
                   {{ item.etiqueta }}
                 </span>
-                <span class="font-medium">{{ item.cantidad }} ({{ item.porcentaje }}%)</span>
-              </div>
-              <div class="w-full bg-neutral-100 rounded-full h-2">
-                <div
-                  class="h-2 rounded-full transition-all duration-700"
-                  :style="{ width: `${item.porcentaje}%`, backgroundColor: item.color }"
-                />
+                <span class="text-xs font-semibold text-neutral-800">{{ item.cantidad }} <span class="text-neutral-400 font-normal">({{ item.porcentaje }}%)</span></span>
               </div>
             </div>
           </div>
+          <p v-else class="text-sm text-neutral-400 text-center py-6">Sin datos</p>
         </div>
       </div>
 

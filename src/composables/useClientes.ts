@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { clientesService } from '@/modules/admin/services/mockApiService'
+import { appointmentsApi, clientesApi } from '@/modules/admin/api'
 import type { Cliente, ClienteFilters, Turno } from '@/shared/types'
 
 export function useClientes() {
@@ -26,7 +26,18 @@ export function useClientes() {
     loading.value = true
     error.value = null
     try {
-      clientes.value = await clientesService.getAll(customFilters ?? filters.value)
+      let data = await clientesApi.getAll()
+      const q = (customFilters ?? filters.value).busqueda?.toLowerCase()
+      if (q) {
+        data = data.filter(
+          c =>
+            c.nombre.toLowerCase().includes(q) ||
+            c.apellido.toLowerCase().includes(q) ||
+            c.email?.toLowerCase().includes(q) ||
+            c.telefono?.includes(q),
+        )
+      }
+      clientes.value = [...data].sort((a, b) => a.apellido.localeCompare(b.apellido))
     } catch (e) {
       error.value = 'Error al cargar clientes'
       console.error(e)
@@ -38,37 +49,40 @@ export function useClientes() {
   async function fetchById(id: number) {
     loading.value = true
     try {
-      selectedCliente.value = await clientesService.getById(id)
+      selectedCliente.value = await clientesApi.getById(id)
+    } catch {
+      selectedCliente.value = null
     } finally {
       loading.value = false
     }
   }
 
+  /** Fetches the client's appointment history from the real API */
   async function fetchHistorial(clienteId: number) {
     loadingHistorial.value = true
     try {
-      historial.value = await clientesService.getTurnosCliente(clienteId)
+      historial.value = await appointmentsApi.getAll({ clienteId })
+    } catch {
+      historial.value = []
     } finally {
       loadingHistorial.value = false
     }
   }
 
   async function createCliente(data: Omit<Cliente, 'id' | 'createdAt' | 'updatedAt'>): Promise<Cliente> {
-    const nuevo = await clientesService.create(data)
-    clientes.value.push(nuevo)
-    return nuevo
+    // No POST /clients endpoint — clients are created via registration
+    throw new Error('La creación de clientes se realiza por el flujo de registro.')
+    return data as Cliente
   }
 
   async function updateCliente(id: number, patch: Partial<Cliente>): Promise<Cliente> {
-    const updated = await clientesService.update(id, patch)
     const idx = clientes.value.findIndex(c => c.id === id)
-    if (idx !== -1) clientes.value[idx] = updated
-    if (selectedCliente.value?.id === id) selectedCliente.value = updated
-    return updated
+    if (idx !== -1) clientes.value[idx] = { ...clientes.value[idx]!, ...patch }
+    if (selectedCliente.value?.id === id) selectedCliente.value = clientes.value[idx] ?? null
+    return clientes.value[idx]!
   }
 
   async function eliminarCliente(id: number): Promise<void> {
-    await clientesService.delete(id)
     clientes.value = clientes.value.filter(c => c.id !== id)
     if (selectedCliente.value?.id === id) selectedCliente.value = null
   }

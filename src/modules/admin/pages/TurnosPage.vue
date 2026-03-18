@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useTurnos } from '@/composables/useTurnos'
+import { serviciosApi, clientesApi } from '@/modules/admin/api'
 import Loading from '@/shared/components/common/Loading.vue'
 import EmptyState from '@/shared/components/common/EmptyState.vue'
 import TurnoStatusBadge from '../components/TurnoStatusBadge.vue'
@@ -12,14 +13,29 @@ import {
   Search, Plus, Calendar, Filter, X, ChevronLeft, ChevronRight,
   Eye, Edit, CheckCircle, XCircle, Check
 } from 'lucide-vue-next'
-import type { Turno, EstadoTurno } from '@/shared/types'
+import type { Turno, EstadoTurno, Servicio, Cliente } from '@/shared/types'
 
 const {
   turnos, loading,
   selectedTurno, filters,
   totalTurnos, pendientes, confirmados,
-  fetchAll, cambiarEstado, selectTurno, clearFilters
+  fetchAll, cambiarEstado, createTurno, updateTurno, selectTurno, clearFilters
 } = useTurnos()
+
+// Lists for the create/edit modal
+const servicios = ref<Servicio[]>([])
+const clientes  = ref<Cliente[]>([])
+
+async function loadModalData() {
+  try {
+    ;[servicios.value, clientes.value] = await Promise.all([
+      serviciosApi.getAll(false),
+      clientesApi.getAll(),
+    ])
+  } catch (e) {
+    console.error('Error al cargar datos para el modal:', e)
+  }
+}
 
 // Local state
 const searchQuery = ref('')
@@ -102,9 +118,19 @@ async function handleCambiarEstado(turnoId: number, estado: EstadoTurno) {
   showDrawer.value = false
 }
 
-async function handleSave() {
+async function handleSave(data: Partial<Turno>) {
   showFormModal.value = false
-  await fetchAll()
+  try {
+    if (editingTurno.value) {
+      await updateTurno(editingTurno.value.id, data)
+    } else {
+      await createTurno(data as Omit<Turno, 'id'>)
+    }
+    await fetchAll()
+  } catch (e) {
+    console.error('Error al guardar turno:', e)
+    alert('Error al guardar el turno. Por favor, intentá de nuevo.')
+  }
 }
 
 function limpiarFiltros() {
@@ -117,7 +143,10 @@ function limpiarFiltros() {
   page.value = 1
 }
 
-onMounted(() => fetchAll())
+onMounted(() => {
+  fetchAll()
+  loadModalData()
+})
 </script>
 
 <template>
@@ -149,17 +178,17 @@ onMounted(() => fetchAll())
       </button>
       <button
         class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-        :class="selectedEstado === 'PENDIENTE' ? 'bg-amber-500 text-white' : 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50'"
-        @click="selectedEstado = selectedEstado === 'PENDIENTE' ? '' : 'PENDIENTE'"
+        :class="selectedEstado === 'PENDING' ? 'bg-amber-500 text-white' : 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50'"
+        @click="selectedEstado = selectedEstado === 'PENDING' ? '' : 'PENDING'"
       >
-        Pendientes ({{ pendientes }})
+        Pendientes ({{ pendientes.length }})
       </button>
       <button
         class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-        :class="selectedEstado === 'CONFIRMADO' ? 'bg-emerald-500 text-white' : 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50'"
-        @click="selectedEstado = selectedEstado === 'CONFIRMADO' ? '' : 'CONFIRMADO'"
+        :class="selectedEstado === 'CONFIRMED' ? 'bg-emerald-500 text-white' : 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50'"
+        @click="selectedEstado = selectedEstado === 'CONFIRMED' ? '' : 'CONFIRMED'"
       >
-        Confirmados ({{ confirmados }})
+        Confirmados ({{ confirmados.length }})
       </button>
     </div>
 
@@ -196,11 +225,11 @@ onMounted(() => fetchAll())
           <label class="label">Estado</label>
           <select v-model="selectedEstado" class="input">
             <option value="">Todos</option>
-            <option value="PENDIENTE">Pendiente</option>
-            <option value="CONFIRMADO">Confirmado</option>
-            <option value="COMPLETADO">Completado</option>
-            <option value="CANCELADO">Cancelado</option>
-            <option value="NO_SHOW">No Show</option>
+            <option value="PENDING">Pendiente</option>
+            <option value="CONFIRMED">Confirmado</option>
+            <option value="DONE">Realizado</option>
+            <option value="CANCELLED">Cancelado</option>
+            <option value="ABSENT">Ausente</option>
           </select>
         </div>
         <div>
@@ -230,7 +259,6 @@ onMounted(() => fetchAll())
             <tr>
               <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">Clienta</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Servicio</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Profesional</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">Fecha</th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Total</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">Estado</th>
@@ -251,9 +279,6 @@ onMounted(() => fetchAll())
               <td class="px-4 py-3 hidden sm:table-cell">
                 <p class="text-neutral-800">{{ t.servicio?.nombre }}</p>
                 <p class="text-xs text-neutral-400">{{ t.servicio?.duracion }} min</p>
-              </td>
-              <td class="px-4 py-3 hidden md:table-cell text-neutral-600">
-                {{ t.profesional?.nombre }} {{ t.profesional?.apellido }}
               </td>
               <td class="px-4 py-3">
                 <p class="font-medium text-neutral-800">{{ formatFecha(t.fecha) }}</p>
@@ -283,26 +308,26 @@ onMounted(() => fetchAll())
                     <Edit :size="15" />
                   </button>
                   <button
-                    v-if="t.estado === 'PENDIENTE'"
+                    v-if="t.estado === 'PENDING'"
                     class="p-1.5 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
                     title="Confirmar"
-                    @click="handleCambiarEstado(t.id, 'CONFIRMADO')"
+                    @click="handleCambiarEstado(t.id, 'CONFIRMED')"
                   >
                     <CheckCircle :size="15" />
                   </button>
                   <button
-                    v-if="t.estado === 'CONFIRMADO'"
+                    v-if="t.estado === 'CONFIRMED'"
                     class="p-1.5 rounded-lg text-neutral-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                     title="Completar"
-                    @click="handleCambiarEstado(t.id, 'COMPLETADO')"
+                    @click="handleCambiarEstado(t.id, 'DONE')"
                   >
                     <Check :size="15" />
                   </button>
                   <button
-                    v-if="['PENDIENTE', 'CONFIRMADO'].includes(t.estado)"
+                    v-if="['PENDING', 'CONFIRMED'].includes(t.estado)"
                     class="p-1.5 rounded-lg text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors"
                     title="Cancelar"
-                    @click="handleCambiarEstado(t.id, 'CANCELADO')"
+                    @click="handleCambiarEstado(t.id, 'CANCELLED')"
                   >
                     <XCircle :size="15" />
                   </button>
@@ -350,6 +375,8 @@ onMounted(() => fetchAll())
     <TurnoFormModal
       v-model="showFormModal"
       :turno="editingTurno"
+      :servicios="servicios"
+      :clientes="clientes"
       @save="handleSave"
     />
   </div>

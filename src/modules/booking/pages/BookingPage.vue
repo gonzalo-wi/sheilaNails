@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingStore } from '../store/booking'
+import { useClientAuthStore } from '@/modules/auth/store/clientAuth'
+import AuthModal from '@/modules/auth/components/AuthModal.vue'
 import Button from '@/shared/components/ui/Button.vue'
 import Input from '@/shared/components/ui/Input.vue'
 import Loading from '@/shared/components/common/Loading.vue'
@@ -9,16 +11,33 @@ import EmptyState from '@/shared/components/common/EmptyState.vue'
 import { Clock, User, Calendar, Check, ChevronRight, ChevronLeft } from 'lucide-vue-next'
 import { format, addDays, startOfDay, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
-import type { Servicio, Profesional, Disponibilidad } from '@/shared/types'
+import type { Servicio, Disponibilidad } from '@/shared/types'
+import { serviciosApi } from '@/modules/admin/api'
+import { bookingApi } from '../api'
 
 const router = useRouter()
 const bookingStore = useBookingStore()
+const clientAuthStore = useClientAuthStore()
 
 const servicios = ref<Servicio[]>([])
-const profesionales = ref<Profesional[]>([])
 const disponibilidad = ref<Disponibilidad | null>(null)
 const loading = ref(false)
 const loadingSlots = ref(false)
+
+// Auth modal
+const showAuthModal = ref(false)
+
+// Pre-fill client data from auth user whenever entering step 4
+watch(() => bookingStore.currentStep, (step) => {
+  if (step === 3 && clientAuthStore.isAuthenticated && clientAuthStore.user) {
+    bookingStore.updateClienteData({
+      nombre: clientAuthStore.user.nombre,
+      apellido: clientAuthStore.user.apellido,
+      email: clientAuthStore.user.email,
+      telefono: clientAuthStore.user.telefono,
+    })
+  }
+})
 
 // Calendario
 const selectedDate = ref<Date>(new Date())
@@ -42,9 +61,8 @@ const formErrors = ref({
 // Steps
 const stepTitles = [
   { number: 1, title: 'Elegí tu servicio' },
-  { number: 2, title: 'Seleccioná profesional' },
-  { number: 3, title: 'Fecha y hora' },
-  { number: 4, title: 'Tus datos' },
+  { number: 2, title: 'Fecha y hora' },
+  { number: 3, title: 'Tus datos' },
 ]
 
 const currentStepTitle = computed(() => {
@@ -54,21 +72,12 @@ const currentStepTitle = computed(() => {
 onMounted(async () => {
   bookingStore.reset()
   await loadServicios()
-  await loadProfesionales()
 })
 
 async function loadServicios() {
   loading.value = true
   try {
-    // servicios.value = await publicApi.getServicios()
-    // Mock data
-    servicios.value = [
-      { id: 1, nombre: 'Manicura Clásica', descripcion: 'Cuidado completo de manos', duracion: 45, precio: 3500, categoria: 'Manicura', activo: true, requiereSena: false },
-      { id: 2, nombre: 'Manicura Semipermanente', descripcion: 'Esmaltado de larga duración', duracion: 60, precio: 5500, categoria: 'Manicura', activo: true, requiereSena: false },
-      { id: 3, nombre: 'Uñas Esculpidas', descripcion: 'Extensión con gel o acrílico', duracion: 120, precio: 12000, categoria: 'Esculpidas', activo: true, requiereSena: true },
-      { id: 4, nombre: 'Nail Art', descripcion: 'Diseños personalizados', duracion: 90, precio: 8000, categoria: 'Diseño', activo: true, requiereSena: false },
-      { id: 5, nombre: 'Pedicura Spa', descripcion: 'Tratamiento completo de pies', duracion: 75, precio: 6500, categoria: 'Pedicura', activo: true, requiereSena: false },
-    ]
+    servicios.value = await serviciosApi.getAllPublic()
   } catch (error) {
     console.error('Error al cargar servicios:', error)
   } finally {
@@ -76,46 +85,20 @@ async function loadServicios() {
   }
 }
 
-async function loadProfesionales() {
-  try {
-    // profesionales.value = await publicApi.getProfesionales()
-    // Mock data
-    profesionales.value = [
-      { id: 1, nombre: 'Ana', apellido: 'García', email: 'ana@example.com', telefono: '1234567890', especialidades: ['Manicura', 'Diseño'], activo: true },
-      { id: 2, nombre: 'Laura', apellido: 'Martínez', email: 'laura@example.com', telefono: '0987654321', especialidades: ['Esculpidas', 'Nail Art'], activo: true },
-      { id: 3, nombre: 'Sofía', apellido: 'López', email: 'sofia@example.com', telefono: '1122334455', especialidades: ['Pedicura', 'Manicura'], activo: true },
-    ]
-  } catch (error) {
-    console.error('Error al cargar profesionales:', error)
-  }
-}
-
 async function loadDisponibilidad(fecha: Date) {
-  if (!bookingStore.selectedServicio || !bookingStore.selectedProfesional) return
+  if (!bookingStore.selectedServicio) return
 
   loadingSlots.value = true
   try {
     const fechaStr = format(fecha, 'yyyy-MM-dd')
-    // disponibilidad.value = await bookingApi.getDisponibilidad(
-    //   bookingStore.selectedServicio.id,
-    //   bookingStore.selectedProfesional.id,
-    //   fechaStr
-    // )
-    
-    // Mock data
-    const slots = []
-    for (let h = 9; h < 20; h++) {
-      for (let m of [0, 30]) {
-        const hora = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
-        slots.push({
-          hora,
-          disponible: Math.random() > 0.3, // 70% disponible
-        })
-      }
+    const result = await bookingApi.getAvailability(fechaStr, bookingStore.selectedServicio.duracion)
+    disponibilidad.value = {
+      fecha: fechaStr,
+      slots: result.available_slots.map(s => ({ hora: s.start_time, disponible: true })),
     }
-    disponibilidad.value = { fecha: fechaStr, slots }
   } catch (error) {
     console.error('Error al cargar disponibilidad:', error)
+    disponibilidad.value = null
   } finally {
     loadingSlots.value = false
   }
@@ -123,11 +106,6 @@ async function loadDisponibilidad(fecha: Date) {
 
 function selectServicio(servicio: Servicio) {
   bookingStore.selectServicio(servicio)
-  bookingStore.nextStep()
-}
-
-function selectProfesional(profesional: Profesional) {
-  bookingStore.selectProfesional(profesional)
   bookingStore.nextStep()
   loadDisponibilidad(selectedDate.value)
 }
@@ -146,6 +124,11 @@ function validateForm(): boolean {
   formErrors.value = { nombre: '', apellido: '', email: '', telefono: '' }
   let isValid = true
 
+  // When authenticated with full profile, no extra validation needed
+  if (clientAuthStore.isAuthenticated && clientAuthStore.user?.nombre) {
+    return true
+  }
+
   if (!bookingStore.clienteData.nombre) {
     formErrors.value.nombre = 'El nombre es requerido'
     isValid = false
@@ -154,14 +137,17 @@ function validateForm(): boolean {
     formErrors.value.apellido = 'El apellido es requerido'
     isValid = false
   }
-  if (!bookingStore.clienteData.email) {
-    formErrors.value.email = 'El email es requerido'
-    isValid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bookingStore.clienteData.email)) {
-    formErrors.value.email = 'Email inválido'
-    isValid = false
+  // Email is not shown as an editable field for authenticated users (we have it from login)
+  if (!clientAuthStore.isAuthenticated) {
+    if (!bookingStore.clienteData.email) {
+      formErrors.value.email = 'El email es requerido'
+      isValid = false
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bookingStore.clienteData.email)) {
+      formErrors.value.email = 'Email inválido'
+      isValid = false
+    }
   }
-  if (!bookingStore.clienteData.telefono) {
+  if (!clientAuthStore.user?.telefono && !bookingStore.clienteData.telefono) {
     formErrors.value.telefono = 'El teléfono es requerido'
     isValid = false
   }
@@ -170,6 +156,11 @@ function validateForm(): boolean {
 }
 
 async function confirmarReserva() {
+  // Safety check: auth might have expired
+  if (!clientAuthStore.isAuthenticated) {
+    showAuthModal.value = true
+    return
+  }
   if (!validateForm()) return
 
   loading.value = true
@@ -183,54 +174,92 @@ async function confirmarReserva() {
     loading.value = false
   }
 }
+/** Called when "Siguiente" is tapped at step 3 — checks auth before proceeding */
+function handleNextFromStep2() {
+  if (!clientAuthStore.isAuthenticated) {
+    showAuthModal.value = true
+    return
+  }
+  bookingStore.nextStep()
+}
+
+/** Called by AuthModal after successful login/register */
+function onAuthenticated() {
+  showAuthModal.value = false
+  if (clientAuthStore.user) {
+    bookingStore.updateClienteData({
+      nombre: clientAuthStore.user.nombre,
+      apellido: clientAuthStore.user.apellido,
+      email: clientAuthStore.user.email,
+      telefono: clientAuthStore.user.telefono,
+    })
+  }
+  bookingStore.nextStep()
+}
 </script>
 
 <template>
-  <div class="container-custom max-w-6xl">
-    <!-- Progress Steps Premium -->
-    <div class="mb-12">
-      <div class="flex items-center justify-between max-w-4xl mx-auto relative">
-        <!-- Background Line -->
-        <div class="absolute left-0 right-0 top-5 h-0.5 bg-neutral-800">
-          <div 
-            class="h-full bg-gradient-to-r from-primary-600 to-primary-500 transition-all duration-500"
-            :style="{ width: `${((bookingStore.currentStep - 1) / 3) * 100}%` }"
-          />
-        </div>
+  <div class="container-custom max-w-6xl px-4">
+    <!-- Progress Steps: desktop full / mobile compact -->
+    <div class="mb-6 md:mb-12">
 
-        <div
-          v-for="step in stepTitles"
-          :key="step.number"
-          class="relative flex flex-col items-center"
-        >
-          <!-- Circle -->
-          <div
-            :class="[
-              'w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all duration-300 relative z-10 border-2',
-              bookingStore.currentStep === step.number
-                ? 'bg-primary-600 text-white border-primary-600 scale-110 shadow-glow'
-                : bookingStore.currentStep > step.number
-                ? 'bg-success-600 text-white border-success-600'
-                : 'bg-neutral-900 text-neutral-500 border-neutral-700',
-            ]"
-          >
-            <Check v-if="bookingStore.currentStep > step.number" :size="20" />
-            <span v-else>{{ step.number }}</span>
+      <!-- Mobile: progress bar + label -->
+      <div class="md:hidden">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-xs text-neutral-500 font-medium">Paso {{ bookingStore.currentStep }} de {{ stepTitles.length }}</span>
+          <div class="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-gradient-to-r from-primary-600 to-primary-400 rounded-full transition-all duration-500"
+              :style="{ width: `${(bookingStore.currentStep / stepTitles.length) * 100}%` }"
+            />
           </div>
-          
-          <!-- Label -->
-          <span
-            class="text-xs md:text-sm mt-3 font-medium text-center max-w-[100px] transition-colors"
-            :class="bookingStore.currentStep >= step.number ? 'text-white' : 'text-neutral-600'"
-          >
-            {{ step.title }}
-          </span>
+          <div class="flex gap-1">
+            <div
+              v-for="step in stepTitles"
+              :key="step.number"
+              :class="[
+                'w-2 h-2 rounded-full transition-all duration-300',
+                bookingStore.currentStep > step.number ? 'bg-success-500'
+                : bookingStore.currentStep === step.number ? 'bg-primary-500 scale-125'
+                : 'bg-neutral-700'
+              ]"
+            />
+          </div>
         </div>
+        <h2 class="text-2xl font-display font-bold text-white">{{ currentStepTitle }}</h2>
       </div>
-      
-      <h2 class="text-3xl font-display font-bold text-center mt-10 text-white">
-        {{ currentStepTitle }}
-      </h2>
+
+      <!-- Desktop: full stepper -->
+      <div class="hidden md:block">
+        <div class="flex items-center justify-between max-w-4xl mx-auto relative">
+          <div class="absolute left-0 right-0 top-5 h-0.5 bg-neutral-800">
+            <div
+              class="h-full bg-gradient-to-r from-primary-600 to-primary-500 transition-all duration-500"
+              :style="{ width: `${((bookingStore.currentStep - 1) / (stepTitles.length - 1)) * 100}%` }"
+            />
+          </div>
+          <div v-for="step in stepTitles" :key="step.number" class="relative flex flex-col items-center">
+            <div
+              :class="[
+                'w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all duration-300 relative z-10 border-2',
+                bookingStore.currentStep === step.number ? 'bg-primary-600 text-white border-primary-600 scale-110 shadow-glow'
+                : bookingStore.currentStep > step.number ? 'bg-success-600 text-white border-success-600'
+                : 'bg-neutral-900 text-neutral-500 border-neutral-700',
+              ]"
+            >
+              <Check v-if="bookingStore.currentStep > step.number" :size="20" />
+              <span v-else>{{ step.number }}</span>
+            </div>
+            <span
+              class="text-xs md:text-sm mt-3 font-medium text-center max-w-[100px] transition-colors"
+              :class="bookingStore.currentStep >= step.number ? 'text-white' : 'text-neutral-600'"
+            >
+              {{ step.title }}
+            </span>
+          </div>
+        </div>
+        <h2 class="text-3xl font-display font-bold text-center mt-10 text-white">{{ currentStepTitle }}</h2>
+      </div>
     </div>
 
     <!-- Step content -->
@@ -280,75 +309,35 @@ async function confirmarReserva() {
         </div>
       </div>
 
-      <!-- Step 2: Selección de profesional -->
+      <!-- Step 2: Fecha y hora -->
       <div v-if="bookingStore.currentStep === 2">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div
-            v-for="profesional in profesionales"
-            :key="profesional.id"
-            :class="[
-              'card-hover cursor-pointer text-center bg-neutral-900/50 border transition-all duration-300',
-              bookingStore.selectedProfesional?.id === profesional.id 
-                ? 'border-primary-500 shadow-glow' 
-                : 'border-neutral-800',
-            ]"
-            @click="selectProfesional(profesional)"
-          >
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary-600 to-primary-500 mx-auto mb-4 flex items-center justify-center">
-              <User :size="36" class="text-white" />
-            </div>
-            <h3 class="text-lg font-semibold text-white mb-2">
-              {{ profesional.nombre }} {{ profesional.apellido }}
-            </h3>
-            <div class="flex flex-wrap gap-2 justify-center">
-              <span 
-                v-for="esp in profesional.especialidades" 
-                :key="esp"
-                class="px-2 py-1 rounded-full bg-primary-500/10 text-primary-400 text-xs font-medium"
-              >
-                {{ esp }}
-              </span>
-            </div>
-            <div 
-              v-if="bookingStore.selectedProfesional?.id === profesional.id"
-              class="mt-4 px-3 py-1.5 rounded-full bg-primary-500/10 text-primary-500 text-xs font-medium inline-flex items-center gap-1"
-            >
-              <Check :size="14" />
-              Seleccionado
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 3: Selección de fecha y hora -->
-      <div v-if="bookingStore.currentStep === 3">
         <div class="card bg-neutral-900/50 border border-neutral-800">
           <h3 class="text-lg font-semibold text-white mb-6 flex items-center gap-2">
             <Calendar :size="20" class="text-primary-500" />
             Seleccioná un día
           </h3>
-          <div class="grid grid-cols-7 gap-3 mb-8">
+          <div class="grid grid-cols-7 gap-1 md:gap-3 mb-6 md:mb-8">
             <button
               v-for="day in weekDays"
               :key="day.toString()"
               :class="[
-                'p-4 rounded-xl border-2 transition-all text-center',
+                'py-2 md:p-4 rounded-xl border-2 transition-all text-center',
                 isSameDay(day, selectedDate)
                   ? 'border-primary-500 bg-primary-500/10 shadow-glow'
                   : 'border-neutral-700 hover:border-primary-500/50 bg-neutral-800/50',
               ]"
               @click="selectDate(day)"
             >
-              <div class="text-xs text-neutral-500 mb-1 uppercase">
+              <div class="text-[10px] md:text-xs text-neutral-500 mb-0.5 uppercase">
                 {{ format(day, 'EEE', { locale: es }) }}
               </div>
-              <div 
-                class="text-xl font-bold mb-1"
+              <div
+                class="text-base md:text-xl font-bold mb-0.5"
                 :class="isSameDay(day, selectedDate) ? 'text-primary-500' : 'text-white'"
               >
                 {{ format(day, 'd') }}
               </div>
-              <div class="text-xs text-neutral-600 uppercase">
+              <div class="text-[10px] md:text-xs text-neutral-600 uppercase">
                 {{ format(day, 'MMM', { locale: es }) }}
               </div>
             </button>
@@ -367,12 +356,12 @@ async function confirmarReserva() {
               :key="slot.hora"
               :disabled="!slot.disponible"
               :class="[
-                'p-3 rounded-lg font-medium transition-all text-center text-sm border-2',
+                'py-2.5 md:p-3 rounded-lg font-medium transition-all text-center text-sm border-2',
                 bookingStore.selectedHora === slot.hora
                   ? 'border-primary-500 bg-primary-500/10 text-primary-500 shadow-glow'
                   : slot.disponible
                   ? 'border-neutral-700 bg-neutral-800/50 text-white hover:border-primary-500/50'
-                  : 'border-neutral-800 bg-neutral-900/30 text-neutral-700 cursor-not-allowed opacity-50',
+                  : 'border-neutral-800 bg-neutral-900/30 text-neutral-700 cursor-not-allowed opacity-40',
               ]"
               @click="selectHora(slot.hora)"
             >
@@ -382,58 +371,59 @@ async function confirmarReserva() {
         </div>
 
         <div class="mt-6 flex justify-between">
-          <Button variant="outline" class="!text-white !border-neutral-700 hover:!bg-neutral-800" @click="bookingStore.prevStep">
-            <ChevronLeft :size="20" class="mr-1" />
+          <Button variant="outline" class="!text-white !border-neutral-700 hover:!bg-neutral-800 !px-3 !py-2 !text-sm md:!px-6 md:!py-3 md:!text-base" @click="bookingStore.prevStep">
+            <ChevronLeft :size="16" class="mr-1" />
             Anterior
           </Button>
-          <Button :disabled="!bookingStore.selectedHora" class="hover-glow" @click="bookingStore.nextStep">
+          <Button :disabled="!bookingStore.selectedHora" class="hover-glow !px-3 !py-2 !text-sm md:!px-6 md:!py-3 md:!text-base" @click="handleNextFromStep2">
             Siguiente
-            <ChevronRight :size="20" class="ml-1" />
+            <ChevronRight :size="16" class="ml-1" />
           </Button>
         </div>
       </div>
 
-      <!-- Step 4: Datos del cliente -->
-      <div v-if="bookingStore.currentStep === 4">
+      <!-- Step 3: Datos del cliente -->
+      <div v-if="bookingStore.currentStep === 3">
         <div class="grid md:grid-cols-2 gap-6">
-          <!-- Formulario -->
-          <div class="card bg-neutral-900/50 border border-neutral-800">
+          <!-- Formulario (solo para usuarios no autenticados) -->
+          <div v-if="!clientAuthStore.isAuthenticated" class="card bg-neutral-900/50 border border-neutral-800">
             <h3 class="text-lg font-semibold text-white mb-6 flex items-center gap-2">
               <User :size="20" class="text-primary-500" />
               Tus datos
             </h3>
             <div class="space-y-5">
-              <Input
-                v-model="bookingStore.clienteData.nombre"
-                label="Nombre"
-                placeholder="Tu nombre"
-                required
-                :error="formErrors.nombre"
-              />
-              <Input
-                v-model="bookingStore.clienteData.apellido"
-                label="Apellido"
-                placeholder="Tu apellido"
-                required
-                :error="formErrors.apellido"
-              />
-              <Input
-                v-model="bookingStore.clienteData.email"
-                type="email"
-                label="Email"
-                placeholder="tu@email.com"
-                required
-                :error="formErrors.email"
-              />
-              <Input
-                v-model="bookingStore.clienteData.telefono"
-                type="tel"
-                label="Teléfono"
-                placeholder="+54 11 1234-5678"
-                required
-                :error="formErrors.telefono"
-              />
+              <Input v-model="bookingStore.clienteData.nombre" label="Nombre" placeholder="Tu nombre" required :error="formErrors.nombre" />
+              <Input v-model="bookingStore.clienteData.apellido" label="Apellido" placeholder="Tu apellido" required :error="formErrors.apellido" />
+              <Input v-model="bookingStore.clienteData.email" type="email" label="Email" placeholder="tu@email.com" required :error="formErrors.email" />
+              <Input v-model="bookingStore.clienteData.telefono" type="tel" label="Teléfono" placeholder="+54 11 1234-5678" required :error="formErrors.telefono" />
             </div>
+          </div>
+
+          <!-- Usuario autenticado: tarjeta identidad -->
+          <div v-else class="card bg-neutral-900/50 border border-neutral-800">
+            <h3 class="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+              <User :size="20" class="text-primary-500" />
+              Tus datos
+            </h3>
+            <div class="flex items-center gap-4 p-4 rounded-xl bg-primary-500/10 border border-primary-500/20 mb-4">
+              <div class="w-12 h-12 rounded-full bg-gradient-to-br from-primary-600 to-primary-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                {{ clientAuthStore.initials || clientAuthStore.user?.email?.[0]?.toUpperCase() || '?' }}
+              </div>
+              <div class="min-w-0">
+                <p v-if="clientAuthStore.fullName" class="font-semibold text-white">{{ clientAuthStore.fullName }}</p>
+                <p class="text-sm text-neutral-400 truncate">{{ clientAuthStore.user?.email }}</p>
+                <p v-if="clientAuthStore.user?.telefono" class="text-sm text-neutral-400">{{ clientAuthStore.user?.telefono }}</p>
+              </div>
+            </div>
+            <!-- Si no tenemos nombre, pedimos que complete los datos -->
+            <template v-if="!clientAuthStore.user?.nombre">
+              <p class="text-xs text-neutral-500 mb-4">Completá tu nombre para la reserva:</p>
+              <div class="space-y-4">
+                <Input v-model="bookingStore.clienteData.nombre" label="Nombre" placeholder="Tu nombre" required :error="formErrors.nombre" />
+                <Input v-model="bookingStore.clienteData.apellido" label="Apellido" placeholder="Tu apellido" required :error="formErrors.apellido" />
+                <Input v-if="!clientAuthStore.user?.telefono" v-model="bookingStore.clienteData.telefono" type="tel" label="Teléfono" placeholder="+54 11 1234-5678" required :error="formErrors.telefono" />
+              </div>
+            </template>
           </div>
 
           <!-- Resumen -->
@@ -443,12 +433,6 @@ async function confirmarReserva() {
               <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
                 <span class="text-neutral-400 text-sm">Servicio</span>
                 <span class="font-semibold text-white text-right">{{ bookingStore.selectedServicio?.nombre }}</span>
-              </div>
-              <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
-                <span class="text-neutral-400 text-sm">Profesional</span>
-                <span class="font-semibold text-white">
-                  {{ bookingStore.selectedProfesional?.nombre }} {{ bookingStore.selectedProfesional?.apellido }}
-                </span>
               </div>
               <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
                 <span class="text-neutral-400 text-sm">Fecha</span>
@@ -480,16 +464,19 @@ async function confirmarReserva() {
         </div>
 
         <div class="mt-6 flex justify-between">
-          <Button variant="outline" class="!text-white !border-neutral-700 hover:!bg-neutral-800" @click="bookingStore.prevStep">
-            <ChevronLeft :size="20" class="mr-1" />
+          <Button variant="outline" class="!text-white !border-neutral-700 hover:!bg-neutral-800 !px-3 !py-2 !text-sm md:!px-6 md:!py-3 md:!text-base" @click="bookingStore.prevStep">
+            <ChevronLeft :size="16" class="mr-1" />
             Anterior
           </Button>
-          <Button :loading="loading" class="hover-glow" @click="confirmarReserva">
+          <Button :loading="loading" class="hover-glow !px-3 !py-2 !text-sm md:!px-6 md:!py-3 md:!text-base" @click="confirmarReserva">
             Confirmar reserva
-            <Check :size="20" class="ml-1" />
+            <Check :size="16" class="ml-1" />
           </Button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Auth modal: shown when client tries to proceed without being logged in -->
+  <AuthModal v-model="showAuthModal" @authenticated="onAuthenticated" />
 </template>

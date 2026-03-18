@@ -9,12 +9,12 @@ import type { Servicio } from '@/shared/types'
 
 const {
   servicios, loading,
-  activos, categorias,
-  fetchAll, toggleActivo, eliminarServicio
+  activos,
+  fetchAll, toggleActivo, eliminarServicio,
+  createServicio, updateServicio
 } = useServicios()
 
 const searchQuery = ref('')
-const selectedCategoria = ref('')
 const showFormModal = ref(false)
 const editingServicio = ref<Servicio | null>(null)
 
@@ -29,9 +29,6 @@ const filtered = computed(() => {
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
     list = list.filter((s: typeof servicios.value[0]) => s.nombre.toLowerCase().includes(q) || s.descripcion?.toLowerCase().includes(q))
-  }
-  if (selectedCategoria.value) {
-    list = list.filter((s: typeof servicios.value[0]) => s.categoria === selectedCategoria.value)
   }
   return list
 })
@@ -55,9 +52,18 @@ async function handleEliminar(s: Servicio) {
   await eliminarServicio(s.id)
 }
 
-async function handleSave() {
-  showFormModal.value = false
-  await fetchAll()
+async function handleSave(data: Partial<Servicio>) {
+  try {
+    if (editingServicio.value) {
+      await updateServicio(editingServicio.value.id, data)
+    } else {
+      await createServicio(data as Omit<Servicio, 'id' | 'createdAt' | 'updatedAt'>)
+    }
+    showFormModal.value = false
+    await fetchAll()
+  } catch (e) {
+    console.error('Error al guardar servicio', e)
+  }
 }
 
 onMounted(() => fetchAll())
@@ -90,10 +96,7 @@ onMounted(() => fetchAll())
           <X :size="14" />
         </button>
       </div>
-      <select v-model="selectedCategoria" class="input w-auto text-sm">
-        <option value="">Todas las categorías</option>
-        <option v-for="cat in categorias" :key="cat" :value="cat">{{ cat }}</option>
-      </select>
+
     </div>
 
     <Loading v-if="loading" />
@@ -118,7 +121,6 @@ onMounted(() => fetchAll())
             <span class="w-10 h-10 rounded-xl flex-shrink-0 shadow-sm" :style="{ backgroundColor: s.color || '#f9a8d4' }" />
             <div class="min-w-0">
               <p class="font-semibold text-neutral-900 truncate">{{ s.nombre }}</p>
-              <span class="inline-block text-xs bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-full mt-0.5">{{ s.categoria }}</span>
             </div>
           </div>
           <button

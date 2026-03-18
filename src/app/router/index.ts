@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/modules/admin/store/auth'
+import { useClientAuthStore } from '@/modules/auth/store/clientAuth'
 
 // Prevent browser from restoring previous scroll position on refresh
 if (typeof window !== 'undefined') {
@@ -33,6 +34,29 @@ const routes: RouteRecordRaw[] = [
         path: 'exito',
         name: 'booking-success',
         component: () => import('@/modules/booking/pages/BookingSuccessPage.vue'),
+      },
+    ],
+  },
+  // Client auth routes (standalone pages, no layout wrapper)
+  {
+    path: '/auth',
+    children: [
+      {
+        path: 'login',
+        name: 'client-login',
+        component: () => import('@/modules/auth/pages/ClientLoginPage.vue'),
+        meta: { clientGuestOnly: true },
+      },
+      {
+        path: 'registro',
+        name: 'client-register',
+        component: () => import('@/modules/auth/pages/ClientRegisterPage.vue'),
+        meta: { clientGuestOnly: true },
+      },
+      {
+        path: 'recuperar',
+        name: 'client-forgot',
+        component: () => import('@/modules/auth/pages/ForgotPasswordPage.vue'),
       },
     ],
   },
@@ -122,21 +146,27 @@ const router = createRouter({
 // Navigation guards
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
+  const clientAuthStore = useClientAuthStore()
 
-  // Cargar auth desde localStorage si no está cargado
+  // Restore sessions from localStorage if not already loaded
   if (!authStore.isAuthenticated && localStorage.getItem('accessToken')) {
     authStore.loadFromStorage()
   }
+  if (!clientAuthStore.isAuthenticated && localStorage.getItem('cliente_token')) {
+    clientAuthStore.loadFromStorage()
+  }
 
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const guestOnly = to.matched.some(record => record.meta.guestOnly)
+  const requiresAdminAuth = to.matched.some(r => r.meta.requiresAuth)
+  const adminGuestOnly = to.matched.some(r => r.meta.guestOnly)
+  const clientGuestOnly = to.matched.some(r => r.meta.clientGuestOnly)
 
-  if (requiresAuth && !authStore.isAuthenticated) {
-    // Redirigir a login si no está autenticado
+  if (requiresAdminAuth && !authStore.isAuthenticated) {
     next({ name: 'admin-login', query: { redirect: to.fullPath } })
-  } else if (guestOnly && authStore.isAuthenticated) {
-    // Redirigir al dashboard si ya está autenticado
+  } else if (adminGuestOnly && authStore.isAuthenticated) {
     next({ name: 'admin-dashboard' })
+  } else if (clientGuestOnly && clientAuthStore.isAuthenticated) {
+    // Already logged in — send to home instead of showing login/register
+    next({ name: 'home' })
   } else {
     next()
   }

@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { serviciosService } from '@/modules/admin/services/mockApiService'
+import { serviciosApi } from '@/modules/admin/api'
 import type { Servicio, ServicioFilters } from '@/shared/types'
 
 export function useServicios() {
@@ -8,16 +8,11 @@ export function useServicios() {
   const error = ref<string | null>(null)
   const selectedServicio = ref<Servicio | null>(null)
 
-  const filters = ref<ServicioFilters>({ busqueda: '', categoria: '', activo: undefined })
+  const filters = ref<ServicioFilters>({ busqueda: '', activo: undefined })
 
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const activos = computed(() => servicios.value.filter(s => s.activo))
-
-  const categorias = computed(() => {
-    const cats = new Set(servicios.value.map(s => s.categoria))
-    return Array.from(cats).sort()
-  })
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -25,7 +20,9 @@ export function useServicios() {
     loading.value = true
     error.value = null
     try {
-      servicios.value = await serviciosService.getAll(customFilters ?? filters.value)
+      // Pass activeOnly = false to include inactive services when the filter allows it
+      const activeOnly = customFilters?.activo !== false && filters.value.activo !== false
+      servicios.value = await serviciosApi.getAll(activeOnly)
     } catch (e) {
       error.value = 'Error al cargar servicios'
       console.error(e)
@@ -35,13 +32,13 @@ export function useServicios() {
   }
 
   async function createServicio(data: Omit<Servicio, 'id' | 'createdAt' | 'updatedAt'>): Promise<Servicio> {
-    const nuevo = await serviciosService.create(data)
+    const nuevo = await serviciosApi.create(data)
     servicios.value.push(nuevo)
     return nuevo
   }
 
   async function updateServicio(id: number, patch: Partial<Servicio>): Promise<Servicio> {
-    const updated = await serviciosService.update(id, patch)
+    const updated = await serviciosApi.update(id, patch)
     const idx = servicios.value.findIndex(s => s.id === id)
     if (idx !== -1) servicios.value[idx] = updated
     if (selectedServicio.value?.id === id) selectedServicio.value = updated
@@ -49,14 +46,14 @@ export function useServicios() {
   }
 
   async function toggleActivo(id: number): Promise<void> {
-    const updated = await serviciosService.toggleActivo(id)
+    const updated = await serviciosApi.toggle(id)
     const idx = servicios.value.findIndex(s => s.id === id)
     if (idx !== -1) servicios.value[idx] = updated
   }
 
   async function eliminarServicio(id: number): Promise<void> {
-    await serviciosService.delete(id)
-    servicios.value = servicios.value.filter(s => s.id !== id)
+    // No DELETE in API — deactivate via toggle as the closest equivalent
+    await toggleActivo(id)
     if (selectedServicio.value?.id === id) selectedServicio.value = null
   }
 
@@ -73,7 +70,6 @@ export function useServicios() {
     filters,
     // Computed
     activos,
-    categorias,
     // Actions
     fetchAll,
     createServicio,

@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { statsService } from '@/modules/admin/services/mockApiService'
+import { dashboardApi } from '@/modules/admin/api'
 import type { DashboardStats } from '@/shared/types'
 
 export function useDashboard() {
@@ -22,6 +22,7 @@ export function useDashboard() {
       confirmados: stats.value.turnosConfirmadosHoy,
       pendientes: stats.value.turnosPendientesHoy,
       cancelados: stats.value.turnosCanceladosHoy,
+      realizados: stats.value.turnosRealizadosHoy,
       ingresos: stats.value.ingresosDia,
       senas: stats.value.senasCobradas,
     }
@@ -33,7 +34,7 @@ export function useDashboard() {
     loading.value = true
     error.value = null
     try {
-      stats.value = await statsService.getDashboardStats()
+      stats.value = await dashboardApi.getMetrics()
     } catch (e) {
       error.value = 'Error al cargar estadísticas'
       console.error(e)

@@ -11,11 +11,11 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), { dot: true, size: 'md' })
 
 const config: Record<string, { label: string; classes: string; dotColor: string }> = {
-  PENDIENTE:  { label: 'Pendiente',  classes: 'bg-amber-100   text-amber-800',  dotColor: 'bg-amber-500'  },
-  CONFIRMADO: { label: 'Confirmado', classes: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500' },
-  COMPLETADO: { label: 'Realizado',  classes: 'bg-blue-100    text-blue-800',   dotColor: 'bg-blue-500'   },
-  CANCELADO:  { label: 'Cancelado',  classes: 'bg-red-100     text-red-800',    dotColor: 'bg-red-500'    },
-  NO_SHOW:    { label: 'No show',    classes: 'bg-neutral-100  text-neutral-600', dotColor: 'bg-neutral-400' },
+  PENDING:   { label: 'Pendiente',  classes: 'bg-amber-100   text-amber-800',   dotColor: 'bg-amber-500'   },
+  CONFIRMED: { label: 'Confirmado', classes: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500'  },
+  DONE:      { label: 'Realizado',  classes: 'bg-blue-100    text-blue-800',    dotColor: 'bg-blue-500'    },
+  CANCELLED: { label: 'Cancelado',  classes: 'bg-red-100     text-red-800',     dotColor: 'bg-red-500'     },
+  ABSENT:    { label: 'Ausente',    classes: 'bg-neutral-100  text-neutral-600', dotColor: 'bg-neutral-400' },
 }
 
 const fallback = { label: 'Pendiente', classes: 'bg-amber-100 text-amber-800', dotColor: 'bg-amber-500' }

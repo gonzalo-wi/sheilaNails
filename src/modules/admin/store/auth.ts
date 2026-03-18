@@ -1,99 +1,65 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Usuario, LoginCredentials, AuthResponse } from '@/shared/types'
 import apiClient from '@/app/axios'
 
+const TOKEN_KEY = 'accessToken'
+const ADMIN_ID_KEY = 'admin_id'
+
 export const useAuthStore = defineStore('auth', () => {
-  // State
-  const user = ref<Usuario | null>(null)
+  // ─── State ───────────────────────────────────────────────────────────────
+  const adminId = ref<number | null>(null)
   const accessToken = ref<string | null>(null)
-  const refreshToken = ref<string | null>(null)
 
-  // Getters
+  // ─── Getters ─────────────────────────────────────────────────────────────
   const isAuthenticated = computed(() => !!accessToken.value)
-  const isAdmin = computed(() => user.value?.rol === 'ADMIN')
-  const userFullName = computed(() => {
-    if (!user.value) return ''
-    return `${user.value.nombre} ${user.value.apellido}`
-  })
+  const isAdmin = computed(() => !!adminId.value)
 
-  // Actions
-  function setAuth(authData: AuthResponse) {
-    user.value = authData.user
-    accessToken.value = authData.accessToken
-    refreshToken.value = authData.refreshToken || null
-
-    // Guardar en localStorage
-    localStorage.setItem('accessToken', authData.accessToken)
-    if (authData.refreshToken) {
-      localStorage.setItem('refreshToken', authData.refreshToken)
-    }
-    localStorage.setItem('user', JSON.stringify(authData.user))
+  // ─── Private helpers ─────────────────────────────────────────────────────
+  function _setSession(token: string, id: number) {
+    accessToken.value = token
+    adminId.value = id
+    localStorage.setItem(TOKEN_KEY, token)
+    localStorage.setItem(ADMIN_ID_KEY, String(id))
   }
 
-  function clearAuth() {
-    user.value = null
+  function _clearSession() {
     accessToken.value = null
-    refreshToken.value = null
-
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('user')
+    adminId.value = null
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(ADMIN_ID_KEY)
   }
 
-  async function login(credentials: LoginCredentials): Promise<void> {
-    try {
-      const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
-      setAuth(response.data)
-    } catch (error) {
-      console.error('Error en login:', error)
-      throw error
-    }
+  // ─── Actions ─────────────────────────────────────────────────────────────
+  async function login(credentials: { email: string; password: string }): Promise<void> {
+    const { data } = await apiClient.post<{ token: string; admin_id: number }>(
+      '/auth/admin/login',
+      credentials,
+    )
+    _setSession(data.token, data.admin_id)
   }
 
   function logout() {
-    clearAuth()
+    _clearSession()
   }
 
   function loadFromStorage() {
-    const token = localStorage.getItem('accessToken')
-    const refresh = localStorage.getItem('refreshToken')
-    const userData = localStorage.getItem('user')
-
-    if (token && userData) {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const id = localStorage.getItem(ADMIN_ID_KEY)
+    if (token && id) {
       accessToken.value = token
-      refreshToken.value = refresh
-      user.value = JSON.parse(userData)
+      adminId.value = Number(id)
     }
   }
 
-  // TODO: Implementar cuando el backend tenga refresh token
-  // async function refreshAccessToken(): Promise<string | null> {
-  //   if (!refreshToken.value) return null
-  //   
-  //   try {
-  //     const response = await apiClient.post<{ accessToken: string }>('/auth/refresh', {
-  //       refreshToken: refreshToken.value,
-  //     })
-  //     accessToken.value = response.data.accessToken
-  //     localStorage.setItem('accessToken', response.data.accessToken)
-  //     return response.data.accessToken
-  //   } catch (error) {
-  //     clearAuth()
-  //     return null
-  //   }
-  // }
+  // Keep these aliases so legacy code that calls setAuth/clearAuth still works
+  const setAuth = (token: string, id: number) => _setSession(token, id)
+  const clearAuth = () => _clearSession()
 
   return {
-    // State
-    user,
+    adminId,
     accessToken,
-    refreshToken,
-    // Getters
     isAuthenticated,
     isAdmin,
-    userFullName,
-    // Actions
     login,
     logout,
     loadFromStorage,
