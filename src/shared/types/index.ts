@@ -63,6 +63,7 @@ export interface Cliente {
   apellido: string
   email: string
   telefono: string
+  activo?: boolean
   fechaNacimiento?: string
   notas?: string
   // Computed / denormalized for admin display
@@ -145,6 +146,16 @@ export interface HorarioConfig {
 
 // ─── Dashboard Stats (extended) ─────────────────────────────────────────────
 
+export interface DashboardPeriod {
+  total: number
+  completed: number
+  cancelled: number
+  pending: number
+  confirmed: number
+  revenue: number
+  deposits: number
+}
+
 export interface DashboardStats {
   // Hoy
   turnosHoy: number
@@ -166,6 +177,14 @@ export interface DashboardStats {
   tasaOcupacion: number
   tasaCancelacion: number
   clientesNuevos: number
+
+  // Full period data from API
+  periodos?: {
+    today: DashboardPeriod
+    week: DashboardPeriod
+    month: DashboardPeriod
+    year: DashboardPeriod
+  }
 
   // Charts
   ingresosUltimos7Dias: IngresoDiario[]

@@ -68,6 +68,8 @@ export interface ClientResponse {
   email: string
   phone: string
   active: boolean
+  appointment_count?: number
+  total_spent?: number
 }
 
 // ─── Appointments ─────────────────────────────────────────────────────────────
@@ -155,11 +157,19 @@ export interface AvailabilityResponse {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
+export interface DashboardPeriodMetrics {
+  total: number
+  completed: number
+  cancelled: number
+  pending: number
+  confirmed: number
+  revenue: number
+  deposits: number
+}
+
 export interface DashboardMetricsResponse {
-  today_appointments: number
-  week_appointments: number
-  today_revenue: number
-  month_revenue: number
-  appointments_by_status: Record<string, number>
-  total_deposits: number
+  today: DashboardPeriodMetrics
+  week: DashboardPeriodMetrics
+  month: DashboardPeriodMetrics
+  year: DashboardPeriodMetrics
 }

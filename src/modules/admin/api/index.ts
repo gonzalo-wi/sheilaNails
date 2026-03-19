@@ -36,6 +36,10 @@ function mapCliente(c: ClientResponse): Cliente {
     apellido: c.last_name,
     email: c.email,
     telefono: c.phone,
+    activo: c.active,
+    cantidadTurnos: c.appointment_count ?? 0,
+    totalGastado: c.total_spent ?? 0,
+    esClienteFrecuente: (c.appointment_count ?? 0) >= 3,
   }
 }
 
@@ -316,10 +320,16 @@ export const dashboardApi = {
       fetchLookupMaps(),
     ])
 
-    const byStatus = data.appointments_by_status ?? {}
-    const totalByStatus = Object.values(byStatus).reduce((s, n) => s + n, 0) || 1
+    const byStatus: Record<string, number> = {
+      CONFIRMED: data.month.confirmed,
+      PENDING:   data.month.pending,
+      CANCELLED: data.month.cancelled,
+      DONE:      data.month.completed,
+    }
+    const totalByStatus = data.month.total || 1
 
     const turnosPorEstado: TurnosPorEstado[] = Object.entries(byStatus)
+      .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([status, count]) => ({
         estado: status,
@@ -343,7 +353,7 @@ export const dashboardApi = {
       }
     }
     // Use accurate API revenue for today
-    if (dayBuckets.has(today)) dayBuckets.get(today)!.ingresos = data.today_revenue
+    if (dayBuckets.has(today)) dayBuckets.get(today)!.ingresos = data.today.revenue
 
     const ingresosUltimos7Dias: IngresoDiario[] = Array.from(dayBuckets.entries()).map(
       ([fecha, v]) => {
@@ -405,27 +415,35 @@ export const dashboardApi = {
       .map(([hora, count]) => ({ hora, ocupacion: Math.round((count / maxHour) * 100) }))
 
     return {
-      turnosHoy: data.today_appointments,
-      ingresosDia: data.today_revenue,
-      senasCobradas: data.total_deposits,
-      turnosConfirmadosHoy: byStatus['CONFIRMED'] ?? 0,
-      turnosPendientesHoy: byStatus['PENDING'] ?? 0,
-      turnosCanceladosHoy: byStatus['CANCELLED'] ?? 0,
-      turnosRealizadosHoy: byStatus['DONE'] ?? 0,
+      turnosHoy: data.today.total,
+      ingresosDia: data.today.revenue,
+      senasCobradas: data.today.deposits,
+      turnosConfirmadosHoy: data.today.confirmed,
+      turnosPendientesHoy: data.today.pending,
+      turnosCanceladosHoy: data.today.cancelled,
+      turnosRealizadosHoy: data.today.completed,
 
-      turnosSemana: data.week_appointments,
-      ingresosSemana: ingresosUltimos7Dias.reduce((s, d) => s + d.ingresos, 0),
-      turnosMes: 0,
-      ingresosMes: data.month_revenue,
+      turnosSemana: data.week.total,
+      ingresosSemana: data.week.revenue,
+      turnosMes: data.month.total,
+      ingresosMes: data.month.revenue,
 
-      ticketPromedio: data.today_appointments > 0
-        ? Math.round(data.today_revenue / data.today_appointments)
+      ticketPromedio: data.month.completed > 0
+        ? Math.round(data.month.revenue / data.month.completed)
         : 0,
       tasaOcupacion: 0,
-      tasaCancelacion: totalByStatus > 0
-        ? Math.round(((byStatus['CANCELLED'] ?? 0) / totalByStatus) * 100)
+      tasaCancelacion: data.month.total > 0
+        ? Math.round((data.month.cancelled / data.month.total) * 100)
         : 0,
       clientesNuevos: 0,
+
+      periodos: {
+        today: data.today,
+        week:  data.week,
+        month: data.month,
+        year:  data.year,
+      },
+
 
       ingresosUltimos7Dias,
       turnosPorEstado,

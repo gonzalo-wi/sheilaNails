@@ -1,19 +1,33 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Sparkles, Clock, Star, CheckCircle } from 'lucide-vue-next'
+import { Sparkles, Clock, Star, CheckCircle, CalendarCheck } from 'lucide-vue-next'
 import Button from '@/shared/components/ui/Button.vue'
-import type { Servicio } from '@/shared/types'
+import Modal from '@/shared/components/ui/Modal.vue'
+import TurnoStatusBadge from '@/modules/admin/components/TurnoStatusBadge.vue'
+import type { Servicio, Turno } from '@/shared/types'
 import { serviciosApi } from '@/modules/admin/api'
+import { bookingApi } from '@/modules/booking/api'
+import { useClientAuthStore } from '@/modules/auth/store/clientAuth'
+import { format, parseISO } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 const servicios = ref<Servicio[]>([])
 const loading = ref(true)
 
+const clientAuth = useClientAuthStore()
+const nextTurno = ref<Turno | null>(null)
+const showTurnoModal = ref(false)
+
+const nextTurnoServicio = computed(() =>
+  nextTurno.value ? servicios.value.find(s => s.id === nextTurno.value!.servicioId) : null
+)
+
 // ——— Counter Animation ———
 const statsRef = ref<HTMLElement | null>(null)
 const statsAnimated = ref(false)
-const counter1 = ref(0)   // → 5000
-const counter2 = ref(0)   // → 15
+const counter1 = ref(0)   // → 500
+const counter2 = ref(0)   // → 5
 const counter3 = ref(0)   // → 49 (display as /10 = 4.9)
 
 const displayCounter3 = computed(() => (counter3.value / 10).toFixed(1))
@@ -90,9 +104,15 @@ const faqs = [
 
 onMounted(async () => {
   try {
-    servicios.value = await serviciosApi.getAllPublic()
+    const promises: Promise<unknown>[] = [serviciosApi.getAllPublic()]
+    if (clientAuth.isAuthenticated) {
+      promises.push(bookingApi.getNextAppointment())
+    }
+    const results = await Promise.all(promises)
+    servicios.value = results[0] as Servicio[]
+    if (clientAuth.isAuthenticated) nextTurno.value = results[1] as Turno | null
   } catch (error) {
-    console.error('Error al cargar servicios:', error)
+    console.error('Error al cargar datos del home:', error)
   } finally {
     loading.value = false
   }
@@ -101,8 +121,8 @@ onMounted(async () => {
   observe(statsRef.value, () => {
     if (statsAnimated.value) return
     statsAnimated.value = true
-    countUp(5000, 2200, v => counter1.value = v)
-    countUp(15,   1500, v => counter2.value = v)
+    countUp(500, 2200, v => counter1.value = v)
+    countUp(5,   1500, v => counter2.value = v)
     countUp(49,   1900, v => counter3.value = v)  // 49 → 4.9
   }, 0.6)
 
@@ -113,6 +133,11 @@ onMounted(async () => {
   observe(contactSectionRef.value,     () => contactVisible.value     = true)
   observe(ctaSectionRef.value,         () => ctaVisible.value         = true)
 })
+
+function formatFechaCorta(fecha: string) {
+  try { return format(parseISO(fecha), "EEEE d 'de' MMMM", { locale: es }) }
+  catch { return fecha }
+}
 
 function scrollToServicios() {
   document.getElementById('servicios')?.scrollIntoView({ behavior: 'smooth' })
@@ -170,6 +195,31 @@ function scrollToServicios() {
             </Button>
           </div>
 
+          <!-- Próximo turno (solo si está logueada y tiene turno) -->
+          <Transition name="fade-up">
+            <div
+              v-if="clientAuth.isAuthenticated && nextTurno"
+              class="mt-8 max-w-sm mx-auto animate-fade-in-up"
+              style="animation-delay: 0.3s"
+            >
+              <button
+                class="w-full flex items-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary-500/40 rounded-2xl px-4 py-3 transition-all group"
+                @click="showTurnoModal = true"
+              >
+                <div class="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center shrink-0">
+                  <CalendarCheck :size="18" class="text-primary-400" />
+                </div>
+                <div class="text-left flex-1 min-w-0">
+                  <p class="text-xs text-neutral-400">Tu próximo turno</p>
+                  <p class="text-sm font-semibold text-white truncate capitalize">
+                    {{ formatFechaCorta(nextTurno.fecha) }} · {{ nextTurno.horaInicio.slice(0,5) }}
+                  </p>
+                </div>
+                <span class="text-neutral-500 group-hover:text-primary-400 transition-colors text-lg">→</span>
+              </button>
+            </div>
+          </Transition>
+
           <!-- Stats -->
           <div ref="statsRef" class="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto pt-8 border-t border-white/10">
             <div class="text-center">
@@ -189,7 +239,7 @@ function scrollToServicios() {
       </div>
 
       <!-- Scroll Indicator -->
-      <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+      <div class="hidden sm:block absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
         <div class="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
           <div class="w-1.5 h-2 bg-white/50 rounded-full mt-2 animate-pulse" />
         </div>
@@ -480,6 +530,54 @@ function scrollToServicios() {
       </div>
     </section>
   </div>
+
+  <!-- Modal: detalle del próximo turno -->
+  <Modal v-if="nextTurno" v-model="showTurnoModal" title="Tu próximo turno" max-width="sm">
+    <div class="space-y-4">
+      <!-- Estado -->
+      <div>
+        <TurnoStatusBadge :estado="nextTurno.estado" />
+      </div>
+
+      <!-- Fecha y hora -->
+      <div class="bg-neutral-50 rounded-xl px-4 py-3 space-y-1">
+        <p class="text-sm font-semibold text-neutral-900 capitalize">
+          {{ formatFechaCorta(nextTurno.fecha) }}
+        </p>
+        <p class="text-sm text-neutral-500 flex items-center gap-1.5">
+          <Clock :size="14" />
+          {{ nextTurno.horaInicio.slice(0,5) }}
+          <span v-if="nextTurno.horaFin"> – {{ nextTurno.horaFin.slice(0,5) }}</span>
+        </p>
+      </div>
+
+      <!-- Servicio -->
+      <div v-if="nextTurnoServicio" class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center shrink-0">
+          <Sparkles :size="15" class="text-primary-600" />
+        </div>
+        <div>
+          <p class="text-sm font-medium text-neutral-900">{{ nextTurnoServicio.nombre }}</p>
+          <p class="text-xs text-neutral-400">{{ nextTurnoServicio.duracion }} min</p>
+        </div>
+      </div>
+
+      <!-- Precio -->
+      <div class="flex items-center justify-between pt-2 border-t border-neutral-100">
+        <span class="text-sm text-neutral-500">Total</span>
+        <span class="text-base font-bold text-neutral-900">${{ nextTurno.precioTotalFinal.toLocaleString('es-AR') }}</span>
+      </div>
+
+      <!-- Notas -->
+      <p v-if="nextTurno.notas" class="text-xs text-neutral-500 bg-neutral-50 rounded-lg px-3 py-2">
+        {{ nextTurno.notas }}
+      </p>
+    </div>
+
+    <template #footer>
+      <button class="btn btn-primary btn-sm w-full" @click="showTurnoModal = false">Cerrar</button>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>

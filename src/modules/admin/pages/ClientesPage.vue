@@ -116,7 +116,6 @@ onMounted(() => fetchAll())
               <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Contacto</th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Turnos</th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Gastado</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden lg:table-cell">Última visita</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wide">VIP</th>
             </tr>
           </thead>
@@ -151,9 +150,6 @@ onMounted(() => fetchAll())
               </td>
               <td class="px-4 py-3 text-right hidden md:table-cell font-semibold text-primary-700">
                 ${{ (c.totalGastado || 0).toLocaleString('es-AR') }}
-              </td>
-              <td class="px-4 py-3 hidden lg:table-cell text-neutral-500 text-xs">
-                {{ formatFecha(c.ultimoTurno) }}
               </td>
               <td class="px-4 py-3 text-center">
                 <Star v-if="c.esClienteFrecuente" :size="16" class="text-amber-400 fill-amber-400 mx-auto" />

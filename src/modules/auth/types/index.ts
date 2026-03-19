@@ -26,4 +26,8 @@ export interface ClienteRegisterData {
 export interface ClienteAuthResponse {
   token: string
   client_id: number
+  first_name?: string
+  last_name?: string
+  email?: string
+  phone?: string
 }

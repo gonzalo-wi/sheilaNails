@@ -20,6 +20,7 @@ const ESTADOS: { value: EstadoTurno; label: string }[] = [
 interface Props {
   modelValue: boolean
   turno?: Turno | null
+  prefill?: Partial<Turno>
   servicios?: Servicio[]
   clientes?: Cliente[]
 }
@@ -51,6 +52,8 @@ function resetForm() {
       precioTotalFinal: 0,
       montoSena: 0,
       senaCobrada: false,
+      // Apply prefill (e.g. date/time from calendar click)
+      ...props.prefill,
     }
   }
 }

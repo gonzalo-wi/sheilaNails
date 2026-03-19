@@ -43,44 +43,45 @@ export function useFinanzas() {
     try {
       const metrics = await dashboardApi.getMetrics()
 
-      // Derive today from ingresosUltimos7Dias
-      const hoyEntry = metrics.ingresosUltimos7Dias.find(d => d.esHoy)
-      const hoyIngresos = hoyEntry?.ingresos ?? metrics.ingresosDia
-      const hoyTurnos = hoyEntry?.turnos ?? metrics.turnosHoy
-
-      // Derive week from ingresosUltimos7Dias
-      const semanaIngresos = metrics.ingresosUltimos7Dias.reduce((s, d) => s + d.ingresos, 0)
-      const semanaTurnos = metrics.ingresosUltimos7Dias.reduce((s, d) => s + d.turnos, 0)
+      const p = metrics.periodos
 
       stats.value = {
         hoy: {
-          ingresos: hoyIngresos,
-          senas: metrics.senasCobradas,
-          cancelaciones: metrics.turnosCanceladosHoy,
-          turnos: metrics.turnosHoy,
-          ticketPromedio: hoyTurnos > 0 ? Math.round(hoyIngresos / hoyTurnos) : 0,
+          ingresos: p?.today.revenue ?? metrics.ingresosDia,
+          senas: p?.today.deposits ?? 0,
+          cancelaciones: p?.today.cancelled ?? metrics.turnosCanceladosHoy,
+          turnos: p?.today.total ?? metrics.turnosHoy,
+          ticketPromedio: (p?.today.completed ?? metrics.turnosRealizadosHoy) > 0
+            ? Math.round((p?.today.revenue ?? metrics.ingresosDia) / (p?.today.completed ?? metrics.turnosRealizadosHoy))
+            : 0,
         },
         semana: {
-          ingresos: semanaIngresos,
-          senas: metrics.senasCobradas,
-          cancelaciones: 0,
-          turnos: metrics.turnosSemana,
-          ticketPromedio: semanaTurnos > 0 ? Math.round(semanaIngresos / semanaTurnos) : 0,
+          ingresos: p?.week.revenue ?? metrics.ingresosSemana,
+          senas: p?.week.deposits ?? 0,
+          cancelaciones: p?.week.cancelled ?? 0,
+          turnos: p?.week.total ?? metrics.turnosSemana,
+          ticketPromedio: (p?.week.completed ?? 0) > 0
+            ? Math.round((p?.week.revenue ?? 0) / p!.week.completed)
+            : 0,
         },
         mes: {
-          ingresos: metrics.ingresosMes,
-          senas: metrics.senasCobradas,
-          cancelaciones: 0,
-          turnos: 0,
-          ticketPromedio: 0,
+          ingresos: p?.month.revenue ?? metrics.ingresosMes,
+          senas: p?.month.deposits ?? metrics.senasCobradas,
+          cancelaciones: p?.month.cancelled ?? 0,
+          turnos: p?.month.total ?? metrics.turnosMes,
+          ticketPromedio: (p?.month.completed ?? 0) > 0
+            ? Math.round((p?.month.revenue ?? 0) / p!.month.completed)
+            : 0,
         },
         mesAnterior: { ...EMPTY_PERIODO },
         anio: {
-          ingresos: metrics.ingresosMes,
-          senas: metrics.senasCobradas,
-          cancelaciones: 0,
-          turnos: 0,
-          ticketPromedio: 0,
+          ingresos: p?.year.revenue ?? metrics.ingresosMes,
+          senas: p?.year.deposits ?? metrics.senasCobradas,
+          cancelaciones: p?.year.cancelled ?? 0,
+          turnos: p?.year.total ?? 0,
+          ticketPromedio: (p?.year.completed ?? 0) > 0
+            ? Math.round((p?.year.revenue ?? 0) / p!.year.completed)
+            : 0,
         },
         ingresosPorDia: metrics.ingresosUltimos7Dias.map(d => ({
           fecha: d.fecha,

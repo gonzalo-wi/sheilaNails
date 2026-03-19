@@ -9,10 +9,13 @@ export function useDashboard() {
 
   // ── Computed ───────────────────────────────────────────────────────────────
 
-  /** Variación porcentual ingresos mes vs mes anterior */
+  /** Variación porcentual ingresos semana sobre el mes */
   const variacionIngresos = computed(() => {
-    // Placeholder — real comparison would use FinanzasStats
-    return +17.4
+    if (!stats.value) return 0
+    const mes = stats.value.ingresosMes
+    const semana = stats.value.ingresosSemana
+    if (!mes) return 0
+    return Number(((semana / mes) * 100).toFixed(1))
   })
 
   const resumenHoy = computed(() => {

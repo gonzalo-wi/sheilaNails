@@ -9,6 +9,7 @@ import EmptyState from '@/shared/components/common/EmptyState.vue'
 import TurnoStatusBadge from '../components/TurnoStatusBadge.vue'
 import TurnoDetailsDrawer from '../components/TurnoDetailsDrawer.vue'
 import TurnoFormModal from '../components/TurnoFormModal.vue'
+import { addDays, startOfMonth, endOfMonth } from 'date-fns'
 import {
   Search, Plus, Calendar, Filter, X, ChevronLeft, ChevronRight,
   Eye, Edit, CheckCircle, XCircle, Check
@@ -38,11 +39,33 @@ async function loadModalData() {
 }
 
 // Local state
+const today: string = new Date().toISOString().split('T')[0]!
 const searchQuery = ref('')
 const selectedEstado = ref<EstadoTurno | ''>('')
-const selectedFechaDesde = ref('')
+const selectedFechaDesde = ref(today)   // default: desde hoy
 const selectedFechaHasta = ref('')
 const showFilters = ref(false)
+type QuickPeriod = 'hoy' | '7d' | 'mes' | 'pasados' | null
+const activeQuick = ref<QuickPeriod>('7d')
+
+function setQuickPeriod(period: QuickPeriod) {
+  activeQuick.value = period
+  const now = new Date()
+  const toISO = (d: Date): string => d.toISOString().split('T')[0]!
+  if (period === 'hoy') {
+    selectedFechaDesde.value = today
+    selectedFechaHasta.value = today
+  } else if (period === '7d') {
+    selectedFechaDesde.value = today
+    selectedFechaHasta.value = toISO(addDays(now, 7))
+  } else if (period === 'mes') {
+    selectedFechaDesde.value = toISO(startOfMonth(now))
+    selectedFechaHasta.value = toISO(endOfMonth(now))
+  } else if (period === 'pasados') {
+    selectedFechaDesde.value = ''
+    selectedFechaHasta.value = today
+  }
+}
 const showDrawer = ref(false)
 const showFormModal = ref(false)
 const editingTurno = ref<Turno | null>(null)
@@ -69,6 +92,19 @@ watch(selectedEstado, (val) => {
 watch([selectedFechaDesde, selectedFechaHasta], ([desde, hasta]) => {
   filters.value.fechaDesde = desde || undefined
   filters.value.fechaHasta = hasta || undefined
+  // Deactivate quick period chip if user manually changes dates
+  if (activeQuick.value !== null) {
+    const now = new Date()
+    const toISO = (d: Date): string => d.toISOString().split('T')[0]!
+    const expected: Record<NonNullable<QuickPeriod>, [string, string]> = {
+      hoy:     [today, today],
+      '7d':    [today, toISO(addDays(now, 7))],
+      mes:     [toISO(startOfMonth(now)), toISO(endOfMonth(now))],
+      pasados: ['', today],
+    }
+    const [expDesde, expHasta] = expected[activeQuick.value]
+    if (desde !== expDesde || hasta !== expHasta) activeQuick.value = null
+  }
   fetchAll()
   page.value = 1
 })
@@ -136,14 +172,19 @@ async function handleSave(data: Partial<Turno>) {
 function limpiarFiltros() {
   searchQuery.value = ''
   selectedEstado.value = ''
-  selectedFechaDesde.value = ''
-  selectedFechaHasta.value = ''
+  activeQuick.value = '7d'
+  selectedFechaDesde.value = today
+  selectedFechaHasta.value = addDays(new Date(), 7).toISOString().split('T')[0]!
   clearFilters()
   fetchAll()
   page.value = 1
 }
 
 onMounted(() => {
+  const in7 = addDays(new Date(), 7).toISOString().split('T')[0]!
+  filters.value.fechaDesde = today
+  filters.value.fechaHasta = in7
+  selectedFechaHasta.value = in7
   fetchAll()
   loadModalData()
 })
@@ -165,6 +206,21 @@ onMounted(() => {
           <Plus :size="16" /> Nuevo turno
         </button>
       </div>
+    </div>
+
+    <!-- Quick period shortcuts -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button
+        v-for="([key, label]) in ([['hoy','Hoy'],['7d','Próx. 7 días'],['mes','Este mes'],['pasados','Pasados']] as [QuickPeriod, string][])"
+        :key="key ?? 'none'"
+        class="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
+        :class="activeQuick === key
+          ? 'bg-primary-600 text-white border-primary-600'
+          : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'"
+        @click="setQuickPeriod(key)"
+      >
+        {{ label }}
+      </button>
     </div>
 
     <!-- Summary pills -->

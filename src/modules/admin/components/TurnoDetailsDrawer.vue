@@ -5,7 +5,7 @@
  * Emite eventos para cambiar estado, editar y cerrar.
  */
 import { computed } from 'vue'
-import { X, Phone, Clock, Edit2, CheckCircle, XCircle, Star } from 'lucide-vue-next'
+import { X, Phone, Clock, Edit2, CheckCircle, XCircle, Star, CalendarPlus } from 'lucide-vue-next'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import TurnoStatusBadge from './TurnoStatusBadge.vue'
@@ -22,6 +22,7 @@ const emit = defineEmits<{
   'update:modelValue': [v: boolean]
   'edit': [turno: Turno]
   'cambiar-estado': [id: number, estado: EstadoTurno]
+  'rebook': [turno: Turno]
 }>()
 
 function close() { emit('update:modelValue', false) }
@@ -218,23 +219,23 @@ function onCambiarEstado(estado: EstadoTurno) {
           <!-- Primary actions -->
           <div class="grid grid-cols-2 gap-2">
             <button
-              v-if="turno.estado === 'PENDIENTE'"
+              v-if="turno.estado === 'PENDING'"
               class="btn btn-primary btn-sm"
-              @click="onCambiarEstado('CONFIRMADO' as EstadoTurno)"
+              @click="onCambiarEstado('CONFIRMED' as EstadoTurno)"
             >
               <CheckCircle :size="16" /> Confirmar
             </button>
             <button
-              v-if="turno.estado === 'CONFIRMADO'"
+              v-if="turno.estado === 'CONFIRMED'"
               class="btn bg-blue-600 text-white hover:bg-blue-700 btn-sm"
-              @click="onCambiarEstado('COMPLETADO' as EstadoTurno)"
+              @click="onCambiarEstado('DONE' as EstadoTurno)"
             >
               <Star :size="16" /> Marcar realizado
             </button>
             <button
-              v-if="['PENDIENTE','CONFIRMADO'].includes(turno.estado)"
+              v-if="['PENDING','CONFIRMED'].includes(turno.estado)"
               class="btn btn-outline btn-sm text-red-600 border-red-200 hover:bg-red-50"
-              @click="onCambiarEstado('CANCELADO' as EstadoTurno)"
+              @click="onCambiarEstado('CANCELLED' as EstadoTurno)"
             >
               <XCircle :size="16" /> Cancelar
             </button>
@@ -245,6 +246,15 @@ function onCambiarEstado(estado: EstadoTurno) {
               <Edit2 :size="16" /> Editar
             </button>
           </div>
+
+          <!-- Rebook button (only for cancelled) -->
+          <button
+            v-if="turno.estado === 'CANCELLED'"
+            class="btn btn-primary btn-sm w-full"
+            @click="emit('rebook', turno)"
+          >
+            <CalendarPlus :size="16" /> Nueva reserva en este horario
+          </button>
         </div>
       </aside>
     </Transition>

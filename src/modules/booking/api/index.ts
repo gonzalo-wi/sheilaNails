@@ -81,5 +81,11 @@ export const bookingApi = {
     const { data } = await clientApiClient.patch<AppointmentResponse>(`/appointments/${id}/cancel`)
     return mapAppointment(data)
   },
+
+  /** GET /appointments/next — next upcoming appointment for the logged-in client */
+  async getNextAppointment(): Promise<Turno | null> {
+    const { data } = await clientApiClient.get<{ next_appointment: AppointmentResponse | null }>('/appointments/next')
+    return data.next_appointment ? mapAppointment(data.next_appointment) : null
+  },
 }
 

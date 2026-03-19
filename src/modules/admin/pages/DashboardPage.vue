@@ -106,7 +106,7 @@ const maxBarIngresos = computed(() =>
         <MetricCard
           label="Turnos esta semana"
           :value="stats.turnosSemana"
-          :subvalue="`${stats.turnosMes} en el mes`"
+          :subvalue="`${stats.turnosMes} en el mes · ${formatCurrency(stats.ingresosSemana)}`"
           icon-bg="bg-blue-100"
         >
           <template #icon><Calendar :size="20" class="text-blue-600" /></template>
@@ -117,7 +117,8 @@ const maxBarIngresos = computed(() =>
           :value="formatCurrency(stats.ingresosMes)"
           :subvalue="`Ticket promedio: ${formatCurrency(stats.ticketPromedio)}`"
           icon-bg="bg-emerald-100"
-          :trend="variacionIngresos"
+          :trend="variacionIngresos !== 0 ? variacionIngresos : undefined"
+          trend-label="de ingresos esta semana"
         >
           <template #icon><DollarSign :size="20" class="text-emerald-600" /></template>
         </MetricCard>
@@ -172,7 +173,7 @@ const maxBarIngresos = computed(() =>
         <!-- Turnos por estado (SVG donut) -->
         <div class="bg-white rounded-xl shadow-soft p-5">
           <h2 class="font-semibold text-neutral-800 mb-4 flex items-center gap-2">
-            <CheckCircle :size="18" class="text-emerald-500" /> Turnos por estado
+            <CheckCircle :size="18" class="text-emerald-500" /> Turnos por estado · mes
           </h2>
           <div v-if="donutSegments.length" class="flex items-center gap-6">
             <!-- Donut SVG -->
@@ -195,9 +196,9 @@ const maxBarIngresos = computed(() =>
                 />
                 <!-- Center label -->
                 <text x="70" y="66" text-anchor="middle" class="text-2xl" font-size="22" font-weight="700" fill="#1a1a1a">
-                  {{ stats?.turnosHoy ?? 0 }}
+                  {{ stats?.turnosMes ?? 0 }}
                 </text>
-                <text x="70" y="82" text-anchor="middle" font-size="9" fill="#9ca3af">total</text>
+                <text x="70" y="82" text-anchor="middle" font-size="9" fill="#9ca3af">este mes</text>
               </svg>
             </div>
             <!-- Legend -->

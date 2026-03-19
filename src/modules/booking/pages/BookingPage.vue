@@ -8,8 +8,8 @@ import Button from '@/shared/components/ui/Button.vue'
 import Input from '@/shared/components/ui/Input.vue'
 import Loading from '@/shared/components/common/Loading.vue'
 import EmptyState from '@/shared/components/common/EmptyState.vue'
-import { Clock, User, Calendar, Check, ChevronRight, ChevronLeft } from 'lucide-vue-next'
-import { format, addDays, startOfDay, isSameDay } from 'date-fns'
+import { Clock, User, Calendar, Check, ChevronRight, ChevronLeft, AlertCircle } from 'lucide-vue-next'
+import { format, addDays, startOfDay, isSameDay, isBefore } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { Servicio, Disponibilidad } from '@/shared/types'
 import { serviciosApi } from '@/modules/admin/api'
@@ -23,6 +23,7 @@ const servicios = ref<Servicio[]>([])
 const disponibilidad = ref<Disponibilidad | null>(null)
 const loading = ref(false)
 const loadingSlots = ref(false)
+const bookingError = ref<string | null>(null)
 
 // Auth modal
 const showAuthModal = ref(false)
@@ -156,6 +157,7 @@ function validateForm(): boolean {
 }
 
 async function confirmarReserva() {
+  bookingError.value = null
   // Safety check: auth might have expired
   if (!clientAuthStore.isAuthenticated) {
     showAuthModal.value = true
@@ -163,13 +165,35 @@ async function confirmarReserva() {
   }
   if (!validateForm()) return
 
+  // Frontend guard: reject past dates
+  if (bookingStore.selectedFecha && isBefore(new Date(bookingStore.selectedFecha + 'T00:00:00'), startOfDay(new Date()))) {
+    bookingError.value = 'No se pueden agendar turnos en fechas pasadas. Por favor elegí otra fecha.'
+    return
+  }
+
   loading.value = true
   try {
     await bookingStore.createTurno()
     router.push('/turnos/exito')
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error al crear turno:', error)
-    alert('Hubo un error al crear tu turno. Por favor, intentá nuevamente.')
+    let msg = 'Hubo un error al crear tu turno. Por favor, intentá nuevamente.'
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosErr = error as { response?: { data?: { error?: string; message?: string } } }
+      msg = axiosErr.response?.data?.error
+        ?? axiosErr.response?.data?.message
+        ?? msg
+    }
+
+    // If the error is about an existing appointment or a past date, go back to date picker
+    const isDateConflict = /turno agendado|fecha pasada/i.test(msg)
+    if (isDateConflict) {
+      bookingStore.selectDateTime('', '')
+      bookingStore.currentStep = 2
+    }
+    bookingError.value = isDateConflict
+      ? `${msg} Por favor elegí otra fecha.`
+      : msg
   } finally {
     loading.value = false
   }
@@ -427,37 +451,34 @@ function onAuthenticated() {
           </div>
 
           <!-- Resumen -->
-          <div class="card bg-gradient-to-br from-neutral-900/80 to-neutral-900/50 border border-neutral-700">
-            <h3 class="text-lg font-semibold text-white mb-6">Resumen de tu turno</h3>
-            <div class="space-y-4">
-              <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
-                <span class="text-neutral-400 text-sm">Servicio</span>
-                <span class="font-semibold text-white text-right">{{ bookingStore.selectedServicio?.nombre }}</span>
-              </div>
-              <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
-                <span class="text-neutral-400 text-sm">Fecha</span>
-                <span class="font-semibold text-white">{{ bookingStore.selectedFecha }}</span>
-              </div>
-              <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
-                <span class="text-neutral-400 text-sm">Hora</span>
-                <span class="font-semibold text-white">{{ bookingStore.selectedHora }}</span>
-              </div>
-              <div class="flex justify-between items-start pb-3 border-b border-neutral-800">
-                <span class="text-neutral-400 text-sm">Duración</span>
-                <span class="font-semibold text-white">{{ bookingStore.selectedServicio?.duracion }} min</span>
-              </div>
-              
-              <!-- Total destacado -->
-              <div class="pt-6 mt-6 border-t-2 border-primary-500/20">
-                <div class="flex justify-between items-center">
-                  <span class="text-lg font-semibold text-white">Total</span>
-                  <div class="text-right">
-                    <div class="text-3xl font-bold text-gradient">
-                      ${{ (bookingStore.selectedServicio?.precio || 0) / 1000 }}k
-                    </div>
-                    <div class="text-xs text-neutral-500">ARS {{ bookingStore.selectedServicio?.precio.toLocaleString('es-AR') }}</div>
-                  </div>
+          <div class="rounded-xl border border-neutral-700 bg-neutral-900 p-6 flex flex-col gap-0">
+            <h3 class="text-base font-semibold text-white mb-5 tracking-wide uppercase text-xs text-primary-400">Resumen de tu turno</h3>
+
+            <div class="flex justify-between items-center py-3 border-b border-neutral-800">
+              <span class="text-sm text-neutral-400">Servicio</span>
+              <span class="text-sm font-semibold text-white text-right max-w-[55%] leading-snug">{{ bookingStore.selectedServicio?.nombre }}</span>
+            </div>
+            <div class="flex justify-between items-center py-3 border-b border-neutral-800">
+              <span class="text-sm text-neutral-400">Fecha</span>
+              <span class="text-sm font-semibold text-white">{{ bookingStore.selectedFecha }}</span>
+            </div>
+            <div class="flex justify-between items-center py-3 border-b border-neutral-800">
+              <span class="text-sm text-neutral-400">Hora</span>
+              <span class="text-sm font-semibold text-white">{{ bookingStore.selectedHora }}</span>
+            </div>
+            <div class="flex justify-between items-center py-3 border-b border-neutral-800">
+              <span class="text-sm text-neutral-400">Duración</span>
+              <span class="text-sm font-semibold text-white">{{ bookingStore.selectedServicio?.duracion }} min</span>
+            </div>
+
+            <!-- Total -->
+            <div class="mt-5 rounded-lg bg-primary-500/10 border border-primary-500/20 px-4 py-4 flex justify-between items-center">
+              <span class="text-base font-semibold text-white">Total</span>
+              <div class="text-right">
+                <div class="text-2xl font-bold text-gradient leading-none">
+                  ${{ ((bookingStore.selectedServicio?.precio || 0) / 1000).toFixed(bookingStore.selectedServicio?.precio && bookingStore.selectedServicio.precio % 1000 !== 0 ? 1 : 0) }}k
                 </div>
+                <div class="text-xs text-neutral-500 mt-0.5">ARS {{ bookingStore.selectedServicio?.precio.toLocaleString('es-AR') }}</div>
               </div>
             </div>
           </div>
@@ -472,6 +493,12 @@ function onAuthenticated() {
             Confirmar reserva
             <Check :size="16" class="ml-1" />
           </Button>
+        </div>
+
+        <!-- Error banner -->
+        <div v-if="bookingError" class="mt-4 flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+          <AlertCircle :size="18" class="text-red-400 mt-0.5 shrink-0" />
+          <p class="text-sm text-red-300">{{ bookingError }}</p>
         </div>
       </div>
     </div>

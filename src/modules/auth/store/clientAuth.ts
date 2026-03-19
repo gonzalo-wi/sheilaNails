@@ -48,14 +48,12 @@ export const useClientAuthStore = defineStore('clientAuth', () => {
   // ─── Actions ──────────────────────────────────────────────────────────────
   async function login(credentials: ClienteLoginCredentials): Promise<void> {
     const response = await clientAuthApi.login(credentials)
-    // The login endpoint only returns token + client_id; preserve the email
-    // from the credentials so the booking step can display it.
     _setSession(response.token, response.client_id, {
       id: response.client_id,
-      nombre: '',
-      apellido: '',
-      email: credentials.email,
-      telefono: '',
+      nombre: response.first_name ?? '',
+      apellido: response.last_name ?? '',
+      email: response.email ?? credentials.email,
+      telefono: response.phone ?? '',
       createdAt: new Date().toISOString(),
     })
   }
